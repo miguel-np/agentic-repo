@@ -88,29 +88,61 @@ jobs:
             fi
 
             TARGET_BRANCH="${BRANCH:-main}"
+            
+            # Track what we did for the PR description
+            INSTALLED_NEW=""
+            CONVERTED=""
+            ALREADY_CALLER=""
 
             for FILE in $FILES; do
               FILENAME=$(basename "$FILE")
               CONTENT=$(base64 < "$FILE")
               TARGET_PATH=".github/workflows/${FILENAME}"
 
-              echo "  📄 Installing: $TARGET_PATH"
+              echo "  📄 Processing: $TARGET_PATH"
 
-              # Check if file already exists
+              # Check if file already exists and analyze its content
+              EXISTING_CONTENT=$(gh api "repos/${REPO}/contents/${TARGET_PATH}?ref=${TARGET_BRANCH}" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || echo "")
               EXISTING_SHA=$(gh api "repos/${REPO}/contents/${TARGET_PATH}?ref=${TARGET_BRANCH}" --jq '.sha' 2>/dev/null || echo "")
 
-              if [ -n "$EXISTING_SHA" ]; then
-                # Update existing file
-                gh api "repos/${REPO}/contents/${TARGET_PATH}" \
-                  -X PUT \
-                  -f message="🤖 Update ${FILENAME} from agentic-repo" \
-                  -f content="${CONTENT}" \
-                  -f sha="${EXISTING_SHA}" \
-                  -f branch="${TARGET_BRANCH}" || {
-                  echo "  ❌ Failed to update $FILENAME in $REPO"
+              if [ -n "$EXISTING_CONTENT" ]; then
+                # Check if it's already a caller (uses reusable workflow)
+                if echo "$EXISTING_CONTENT" | grep -q "uses: ${OWNER}/agentic-repo/"; then
+                  echo "  ⏭️  Already using reusable workflow, skipping: $FILENAME"
+                  ALREADY_CALLER="${ALREADY_CALLER}\n- **${FILENAME%.yml}** — already centralized ✅"
                   continue
-                }
-                echo "  ✅ Updated: $FILENAME"
+                fi
+                
+                # Check if it's a full workflow (contains copilot -p or the main logic)
+                if echo "$EXISTING_CONTENT" | grep -q "copilot -p\|Install GitHub Copilot CLI"; then
+                  echo "  🔄 Converting full workflow to caller: $FILENAME"
+                  
+                  # Update existing file with caller version
+                  gh api "repos/${REPO}/contents/${TARGET_PATH}" \
+                    -X PUT \
+                    -f message="🔄 Convert ${FILENAME} to use centralized reusable workflow from agentic-repo" \
+                    -f content="${CONTENT}" \
+                    -f sha="${EXISTING_SHA}" \
+                    -f branch="${TARGET_BRANCH}" || {
+                    echo "  ❌ Failed to convert $FILENAME in $REPO"
+                    continue
+                  }
+                  echo "  ✅ Converted: $FILENAME → now uses centralized workflow"
+                  CONVERTED="${CONVERTED}\n- **${FILENAME%.yml}** — converted from full workflow to caller"
+                else
+                  # Unknown workflow, update anyway
+                  gh api "repos/${REPO}/contents/${TARGET_PATH}" \
+                    -X PUT \
+                    -f message="🤖 Update ${FILENAME} from agentic-repo" \
+                    -f content="${CONTENT}" \
+                    -f sha="${EXISTING_SHA}" \
+                    -f branch="${TARGET_BRANCH}" || {
+                    echo "  ❌ Failed to update $FILENAME in $REPO"
+                    continue
+                  }
+                  echo "  ✅ Updated: $FILENAME"
+                  INSTALLED_NEW="${INSTALLED_NEW}\n- **${FILENAME%.yml}** — updated"
+                fi
               else
                 # Create new file
                 gh api "repos/${REPO}/contents/${TARGET_PATH}" \
@@ -122,28 +154,61 @@ jobs:
                   continue
                 }
                 echo "  ✅ Installed: $FILENAME"
+                INSTALLED_NEW="${INSTALLED_NEW}\n- **${FILENAME%.yml}** — newly installed"
               fi
             done
 
             if [ "$CREATE_PR" = "true" ]; then
+              # Build PR body based on what we did
+              PR_BODY="## 🚀 Agentic Workflows Installation & Centralization
+
+This PR installs/converts workflows to use reusable workflow callers from [\`agentic-repo\`](https://github.com/${OWNER}/agentic-repo).
+
+### 📋 Changes Summary"
+
+              if [ -n "$CONVERTED" ]; then
+                PR_BODY="${PR_BODY}
+
+#### 🔄 Converted to Centralized Workflows
+These workflows were converted from full standalone workflows to lightweight callers that reference the central \`agentic-repo\`:
+$(echo -e "$CONVERTED")"
+              fi
+
+              if [ -n "$INSTALLED_NEW" ]; then
+                PR_BODY="${PR_BODY}
+
+#### ✨ Newly Installed
+$(echo -e "$INSTALLED_NEW")"
+              fi
+
+              if [ -n "$ALREADY_CALLER" ]; then
+                PR_BODY="${PR_BODY}
+
+#### ⏭️ Already Centralized (no changes)
+$(echo -e "$ALREADY_CALLER")"
+              fi
+
+              PR_BODY="${PR_BODY}
+
+### 🎯 Benefits of Centralization
+- **Single source of truth**: All logic lives in \`agentic-repo\`
+- **Automatic updates**: When we improve workflows, all repos benefit instantly
+- **Smaller files**: Caller workflows are ~15 lines vs hundreds
+- **Consistency**: Same behavior across all your repositories
+
+### ⚠️ Required Setup
+- Add a \`COPILOT_PAT\` secret to this repository with a GitHub PAT that has Copilot access
+
+---
+> 🤖 *This PR was automatically created by the [Workflow Installer](https://github.com/${OWNER}/agentic-repo)*"
+
               # Create PR
               PR_URL=$(gh pr create \
                 --repo "$REPO" \
                 --base "$DEFAULT_BRANCH" \
                 --head "$BRANCH" \
-                --title "🤖 Install agentic workflows from agentic-repo" \
-                --body "## 🚀 Agentic Workflows Installation
-
-          This PR installs reusable workflow callers from [\`agentic-repo\`](https://github.com/${OWNER}/agentic-repo).
-
-          ### Workflows included:
-          $(for FILE in $FILES; do echo "- **$(basename $FILE .yml)** — calls \`${OWNER}/agentic-repo\` reusable workflow"; done)
-
-          ### ⚠️ Required setup:
-          - Add a \`COPILOT_PAT\` secret to this repository with a GitHub PAT that has Copilot access
-
-          ---
-          > 🤖 *This PR was automatically created by the [Workflow Installer](https://github.com/${OWNER}/agentic-repo)*" 2>&1) || {
+                --title "🤖 Centralize agentic workflows from agentic-repo" \
+                --body "$PR_BODY" 2>&1) || {
                 echo "❌ Failed to create PR in $REPO"
                 continue
               }
@@ -153,4 +218,5 @@ jobs:
             echo ""
           done
 
+          echo "✅ Installation & centralization completed!"
           echo "✅ Installation completed!"
