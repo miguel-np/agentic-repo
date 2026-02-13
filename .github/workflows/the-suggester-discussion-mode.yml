@@ -81,7 +81,6 @@ jobs:
              SAVE the category ID - you MUST use it when creating discussions.
 
           2. SECOND: Use the GitHub MCP Server to review the last 5 discussions in this repository to understand:
-             - The language used (Spanish, English, etc.)
              - The title structure (emojis, prefixes, etc.)
              - The body structure (sections, formatting)
 
@@ -128,7 +127,7 @@ jobs:
              CRITICAL REQUIREMENTS for each discussion:
              - Category: Use the 'Ideas' category (or equivalent found in step 1)
              - Title: Follow EXACTLY the same style as existing discussions
-             - Language: Use the SAME language as existing discussions
+             - Language: ALWAYS write in English, regardless of the language used in existing discussions
              - Body: Use the SAME structure as existing discussions
              - Include a section explaining what the suggestion is and why it would improve the codebase
              - For UX/Design suggestions, reference the screenshots you took and describe what you observed
@@ -138,8 +137,10 @@ jobs:
              ⚠️ LABELS ARE MANDATORY ⚠️
              After creating each discussion, you MUST add labels to it using the GitHub MCP Server.
              - First, list available labels in the repository
-             - Then, add appropriate labels based on the suggestion type (e.g., 'enhancement', 'security', 'performance', 'documentation', 'design', etc.)
-             - Every discussion MUST have at least one label. DO NOT skip this step!
+             - If the label '🤖 copilot-suggestion' does NOT exist yet, CREATE it first (use color '7057ff' and description 'Automatically generated suggestion by Copilot')
+             - EVERY discussion MUST include the '🤖 copilot-suggestion' label. This is non-negotiable and allows filtering all Copilot-generated discussions later.
+             - Then, add additional labels based on the suggestion type (e.g., 'enhancement', 'security', 'performance', 'documentation', 'design', etc.)
+             - Every discussion MUST have at least the '🤖 copilot-suggestion' label. DO NOT skip this step!
 
           PRIORITY SUGGESTIONS (create discussions for these if issues don't exist):
           1. Custom favicon - Every app should have a unique favicon, not the default Angular one
