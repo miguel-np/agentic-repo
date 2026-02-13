@@ -18,6 +18,7 @@ on:
           - smart-labeler
           - the-suggester-discussion-mode
           - label-beautifier
+          - continuous-docs
       create_pr:
         description: 'Create a PR instead of pushing directly to main'
         required: true
@@ -160,47 +161,35 @@ jobs:
 
             if [ "$CREATE_PR" = "true" ]; then
               # Build PR body based on what we did
-              PR_BODY="## 🚀 Agentic Workflows Installation & Centralization
-
-This PR installs/converts workflows to use reusable workflow callers from [\`agentic-repo\`](https://github.com/${OWNER}/agentic-repo).
-
-### 📋 Changes Summary"
+              PR_BODY="## 🚀 Agentic Workflows Installation & Centralization"
+              PR_BODY="${PR_BODY}"$'\n\n'"This PR installs/converts workflows to use reusable workflow callers from [\`agentic-repo\`](https://github.com/${OWNER}/agentic-repo)."
+              PR_BODY="${PR_BODY}"$'\n\n'"### 📋 Changes Summary"
 
               if [ -n "$CONVERTED" ]; then
-                PR_BODY="${PR_BODY}
-
-#### 🔄 Converted to Centralized Workflows
-These workflows were converted from full standalone workflows to lightweight callers that reference the central \`agentic-repo\`:
-$(echo -e "$CONVERTED")"
+                PR_BODY="${PR_BODY}"$'\n\n'"#### 🔄 Converted to Centralized Workflows"
+                PR_BODY="${PR_BODY}"$'\n'"These workflows were converted from full standalone workflows to lightweight callers that reference the central \`agentic-repo\`:"
+                PR_BODY="${PR_BODY}"$'\n'"$(echo -e "$CONVERTED")"
               fi
 
               if [ -n "$INSTALLED_NEW" ]; then
-                PR_BODY="${PR_BODY}
-
-#### ✨ Newly Installed
-$(echo -e "$INSTALLED_NEW")"
+                PR_BODY="${PR_BODY}"$'\n\n'"#### ✨ Newly Installed"
+                PR_BODY="${PR_BODY}"$'\n'"$(echo -e "$INSTALLED_NEW")"
               fi
 
               if [ -n "$ALREADY_CALLER" ]; then
-                PR_BODY="${PR_BODY}
-
-#### ⏭️ Already Centralized (no changes)
-$(echo -e "$ALREADY_CALLER")"
+                PR_BODY="${PR_BODY}"$'\n\n'"#### ⏭️ Already Centralized (no changes)"
+                PR_BODY="${PR_BODY}"$'\n'"$(echo -e "$ALREADY_CALLER")"
               fi
 
-              PR_BODY="${PR_BODY}
-
-### 🎯 Benefits of Centralization
-- **Single source of truth**: All logic lives in \`agentic-repo\`
-- **Automatic updates**: When we improve workflows, all repos benefit instantly
-- **Smaller files**: Caller workflows are ~15 lines vs hundreds
-- **Consistency**: Same behavior across all your repositories
-
-### ⚠️ Required Setup
-- Add a \`COPILOT_PAT\` secret to this repository with a GitHub PAT that has Copilot access
-
----
-> 🤖 *This PR was automatically created by the [Workflow Installer](https://github.com/${OWNER}/agentic-repo)*"
+              PR_BODY="${PR_BODY}"$'\n\n'"### 🎯 Benefits of Centralization"
+              PR_BODY="${PR_BODY}"$'\n'"- **Single source of truth**: All logic lives in \`agentic-repo\`"
+              PR_BODY="${PR_BODY}"$'\n'"- **Automatic updates**: When we improve workflows, all repos benefit instantly"
+              PR_BODY="${PR_BODY}"$'\n'"- **Smaller files**: Caller workflows are ~15 lines vs hundreds"
+              PR_BODY="${PR_BODY}"$'\n'"- **Consistency**: Same behavior across all your repositories"
+              PR_BODY="${PR_BODY}"$'\n\n'"### ⚠️ Required Setup"
+              PR_BODY="${PR_BODY}"$'\n'"- Add a \`COPILOT_PAT\` secret to this repository with a GitHub PAT that has Copilot access"
+              PR_BODY="${PR_BODY}"$'\n\n'"---"
+              PR_BODY="${PR_BODY}"$'\n'"> 🤖 *This PR was automatically created by the [Workflow Installer](https://github.com/${OWNER}/agentic-repo)*"
 
               # Create PR
               PR_URL=$(gh pr create \
@@ -219,4 +208,3 @@ $(echo -e "$ALREADY_CALLER")"
           done
 
           echo "✅ Installation & centralization completed!"
-          echo "✅ Installation completed!"

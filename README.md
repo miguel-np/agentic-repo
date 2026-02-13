@@ -21,7 +21,8 @@ Hey developer 👋🏻! This repository contains a collection of **reusable GitH
 - **🏷️ Smart Labeler** — Analyzes issues and PRs to assign the most appropriate labels
 - **💡 Copilot Suggester** — Scans your codebase and creates discussion ideas for improvements (security, performance, UX, etc.)
 - **🏷️✨ Label Beautifier** — Modernizes all your labels with emojis, descriptions, and consistent colors
-- **🚀 Workflow Installer** — Deploy these workflows to multiple repos with a single click
+- **� Continuous Documentation** — Improves README fragments and API docs as code evolves; nudges PR authors when explanations drift from the actual implementation
+- **�🚀 Workflow Installer** — Deploy these workflows to multiple repos with a single click
 
 ## 🛠️ Technologies
 
@@ -77,6 +78,9 @@ Run manually from Actions tab. Analyzes your codebase and creates discussion ide
 ### Label Beautifier
 Run manually. Use `dry_run: true` first to preview changes.
 
+### Continuous Documentation
+Triggers automatically on PRs that modify code files. Compares changes against existing README sections and API docs, suggests updates, and leaves a review comment when documentation drifts from the implementation.
+
 ## 📁 Project Structure
 
 ```
@@ -87,12 +91,14 @@ agentic-repo/
 │       ├── smart-labeler.yml             # Reusable workflow
 │       ├── the-suggester-discussion-mode.yml  # Reusable workflow
 │       ├── label-beautifier.yml          # Reusable workflow
+│       ├── continuous-docs.yml            # Reusable workflow
 │       └── workflow-installer.yml        # Installer utility
 ├── caller-workflows/                     # Lightweight callers for other repos
 │   ├── issue-quality-enhancer.yml
 │   ├── smart-labeler.yml
 │   ├── the-suggester-discussion-mode.yml
-│   └── label-beautifier.yml
+│   ├── label-beautifier.yml
+│   └── continuous-docs.yml
 └── README.md
 ```
 

@@ -21,7 +21,8 @@
 - **🏷️ Smart Labeler** — Analiza issues y PRs para asignar las etiquetas más apropiadas
 - **💡 Copilot Suggester** — Escanea tu código y crea discusiones con ideas de mejora (seguridad, rendimiento, UX, etc.)
 - **🏷️✨ Label Beautifier** — Moderniza todas tus etiquetas con emojis, descripciones y colores consistentes
-- **🚀 Workflow Installer** — Despliega estos workflows a múltiples repos con un solo click
+- **� Continuous Documentation** — Mejora fragmentos del README y docs de API conforme el código evoluciona; avisa a los autores de PR cuando las explicaciones se desvían de la implementación real
+- **�🚀 Workflow Installer** — Despliega estos workflows a múltiples repos con un solo click
 
 ## 🛠️ Tecnologías
 
@@ -77,6 +78,9 @@ Ejecución manual desde la pestaña Actions. Analiza tu código y crea discusion
 ### Label Beautifier
 Ejecución manual. Usa `dry_run: true` primero para previsualizar cambios.
 
+### Continuous Documentation
+Se activa automáticamente en PRs que modifican archivos de código. Compara los cambios con las secciones existentes del README y la documentación de API, sugiere actualizaciones y deja un comentario de revisión cuando la documentación se desvía de la implementación.
+
 ## 📁 Estructura del Proyecto
 
 ```
@@ -87,12 +91,14 @@ agentic-repo/
 │       ├── smart-labeler.yml             # Workflow reutilizable
 │       ├── the-suggester-discussion-mode.yml  # Workflow reutilizable
 │       ├── label-beautifier.yml          # Workflow reutilizable
+│       ├── continuous-docs.yml            # Workflow reutilizable
 │       └── workflow-installer.yml        # Utilidad de instalación
 ├── caller-workflows/                     # Callers ligeros para otros repos
 │   ├── issue-quality-enhancer.yml
 │   ├── smart-labeler.yml
 │   ├── the-suggester-discussion-mode.yml
-│   └── label-beautifier.yml
+│   ├── label-beautifier.yml
+│   └── continuous-docs.yml
 ├── README.md                             # Documentación en inglés
 └── README.es.md                          # Documentación en español
 ```
