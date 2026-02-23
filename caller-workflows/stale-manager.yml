@@ -1,0 +1,34 @@
+name: 🧹 Stale Issue & PR Manager
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      stale_days:
+        description: 'Days of inactivity before marking as stale'
+        required: false
+        default: '30'
+        type: string
+      close_days:
+        description: 'Days after stale warning before closing'
+        required: false
+        default: '14'
+        type: string
+      dry_run:
+        description: 'Preview changes without applying them'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  stale:
+    uses: __OWNER__/agentic-repo/.github/workflows/stale-manager.yml@main
+    with:
+      stale_days: ${{ inputs.stale_days || '30' }}
+      close_days: ${{ inputs.close_days || '14' }}
+      dry_run: ${{ inputs.dry_run || 'true' }}
+    secrets: inherit

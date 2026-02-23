@@ -1,0 +1,173 @@
+name: 📦 Dependency Update Advisor
+
+on:
+  schedule:
+    - cron: "0 10 * * 1" # Monday 10:00 UTC
+  workflow_dispatch:
+    inputs:
+      severity_filter:
+        description: 'Minimum severity to report'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - critical-only
+          - security-only
+  workflow_call:
+    inputs:
+      severity_filter:
+        description: 'Minimum severity to report'
+        required: false
+        type: string
+        default: 'all'
+    secrets:
+      COPILOT_PAT:
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-dependencies:
+    name: 📦 Check Dependency Updates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Install GitHub Copilot CLI
+        run: |
+          curl -fsSL https://gh.io/copilot-install | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "--- Copilot CLI version ---"
+          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+
+      - name: 📦 Analyze dependencies and create advisory
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          SEVERITY_FILTER: ${{ inputs.severity_filter || 'all' }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+
+          copilot -p "
+          You are a Dependency Update Advisor for the repository '${{ github.repository }}'.
+          Your job is to analyze the project dependencies, check for available updates
+          and known vulnerabilities, and create a well-structured issue summarizing the findings.
+
+          CONFIGURATION:
+          - Severity filter: $SEVERITY_FILTER
+            - 'all': report all updates (major, minor, patch)
+            - 'critical-only': only report major version updates and security vulnerabilities
+            - 'security-only': only report known security vulnerabilities
+
+          Follow these steps IN ORDER:
+
+          ──────────────────────────────────────────────
+          STEP 1 — DETECT PROJECT TYPE AND DEPENDENCIES
+          ──────────────────────────────────────────────
+          - Scan the repository for dependency files:
+            - package.json / package-lock.json (Node.js/npm)
+            - composer.json / composer.lock (PHP/Composer)
+            - requirements.txt / Pipfile / pyproject.toml (Python)
+            - Gemfile / Gemfile.lock (Ruby)
+            - go.mod / go.sum (Go)
+            - Cargo.toml / Cargo.lock (Rust)
+            - pom.xml / build.gradle (Java)
+            - *.csproj / packages.config (.NET)
+          - List all direct dependencies and their current versions.
+          - If no dependency file is found, report that and stop.
+
+          ──────────────────────────────────────────────
+          STEP 2 — CHECK FOR EXISTING ADVISORY ISSUE
+          ──────────────────────────────────────────────
+          - Use the GitHub MCP Server to search for open issues with the label '📦 dependencies'
+            or titled 'Dependency Update Advisory'.
+          - If a recent advisory issue exists (created in the last 7 days), STOP and add a
+            comment to it instead of creating a new one.
+
+          ──────────────────────────────────────────────
+          STEP 3 — ANALYZE UPDATES AVAILABLE
+          ──────────────────────────────────────────────
+          For each dependency:
+          - Determine the latest stable version available.
+          - Classify the update:
+            - 🔴 **Major** — breaking changes likely (e.g., 2.x → 3.x)
+            - 🟡 **Minor** — new features, backward compatible (e.g., 2.1 → 2.2)
+            - 🟢 **Patch** — bug fixes only (e.g., 2.1.0 → 2.1.1)
+          - Check if the dependency has any known security advisories (CVEs).
+          - Note any deprecation notices.
+
+          Apply the severity filter:
+          - If '$SEVERITY_FILTER' is 'critical-only': only include Major updates and security issues.
+          - If '$SEVERITY_FILTER' is 'security-only': only include dependencies with known CVEs.
+          - If '$SEVERITY_FILTER' is 'all': include everything.
+
+          ──────────────────────────────────────────────
+          STEP 4 — CREATE ADVISORY ISSUE
+          ──────────────────────────────────────────────
+          Use the GitHub MCP Server to create an issue with:
+
+          **Title:** 📦 Dependency Update Advisory — [DATE]
+
+          **Body:**
+
+          ## 📦 Dependency Update Advisory
+
+          Weekly automated check of project dependencies for available updates and security vulnerabilities.
+
+          ### 🔒 Security Vulnerabilities
+          | Package | Current | Fixed In | CVE | Severity |
+          |---------|---------|----------|-----|----------|
+          ...
+          (If none: '✅ No known security vulnerabilities found.')
+
+          ### 🔴 Major Updates (Breaking Changes)
+          | Package | Current | Latest | Changelog |
+          |---------|---------|--------|-----------|
+          ...
+
+          ### 🟡 Minor Updates
+          | Package | Current | Latest |
+          |---------|---------|--------|
+          ...
+
+          ### 🟢 Patch Updates
+          | Package | Current | Latest |
+          |---------|---------|--------|
+          ...
+
+          ### 📋 Recommendations
+          1. (Priority-ordered list of recommended actions)
+          2. ...
+
+          ---
+          > 🤖 *This advisory was automatically generated by Copilot CLI.*
+          > *Review each update before applying. Run tests after updating.*
+
+          ──────────────────────────────────────────────
+          STEP 5 — ASSIGN LABELS
+          ──────────────────────────────────────────────
+          - List available labels in the repository.
+          - If '📦 dependencies' label exists, add it to the issue.
+          - If any security vulnerabilities were found, also add '🔒 security' if it exists.
+          - Create the '📦 dependencies' label if it doesn't exist (color: '0366d6',
+            description: 'Dependency updates and advisories').
+
+          IMPORTANT GUIDELINES:
+          - Be accurate — verify version numbers from the actual dependency files
+          - Don't create noise — if everything is up to date, create a brief issue confirming it
+          - For security issues, always recommend the fix version explicitly
+          - Include links to changelogs when available for major updates
+          - Group related dependencies together (e.g., all @angular/* packages)
+          " --allow-all-tools --model claude-opus-4.6
+          exit_code=$?
+
+          if [ $exit_code -ne 0 ]; then
+            echo "::error::Copilot CLI failed with exit code $exit_code"
+            exit $exit_code
+          fi
+
+          echo "✅ Dependency analysis completed"

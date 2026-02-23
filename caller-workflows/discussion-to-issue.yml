@@ -1,0 +1,24 @@
+name: 💬 Discussion to Issue Converter
+
+on:
+  discussion:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      discussion_number:
+        description: 'Discussion number to convert'
+        required: true
+        type: string
+      label_trigger:
+        description: 'Label that triggers conversion'
+        required: false
+        default: '✅ accepted'
+        type: string
+
+jobs:
+  convert:
+    uses: __OWNER__/agentic-repo/.github/workflows/discussion-to-issue.yml@main
+    with:
+      discussion_number: ${{ inputs.discussion_number || github.event.discussion.number }}
+      label_trigger: ${{ inputs.label_trigger || '✅ accepted' }}
+    secrets: inherit

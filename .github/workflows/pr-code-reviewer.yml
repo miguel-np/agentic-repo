@@ -1,0 +1,257 @@
+name: 🔍 PR Code Reviewer
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_call:
+    inputs:
+      pr_number:
+        description: 'Pull request number'
+        required: true
+        type: string
+      pr_title:
+        description: 'Pull request title'
+        required: true
+        type: string
+      pr_author:
+        description: 'Pull request author login'
+        required: true
+        type: string
+      base_ref:
+        description: 'Base branch of the PR'
+        required: true
+        type: string
+      head_ref:
+        description: 'Head branch of the PR'
+        required: true
+        type: string
+      author_filter:
+        description: 'Who can trigger this workflow: owner_only, collaborators, or all'
+        required: false
+        type: string
+        default: 'owner_only'
+    secrets:
+      COPILOT_PAT:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review-pr:
+    name: 🔍 AI Code Review
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔐 Verify author is allowed
+        id: author_check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_FULL: ${{ github.repository }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          INPUT_AUTHOR: ${{ inputs.pr_author }}
+          AUTHOR_FILTER: ${{ inputs.author_filter || 'owner_only' }}
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || github.token }}
+        run: |
+          author="$PR_AUTHOR"
+          if [ "$EVENT_NAME" = "workflow_call" ]; then
+            author="$INPUT_AUTHOR"
+          fi
+
+          allowed="false"
+          case "$AUTHOR_FILTER" in
+            all)
+              allowed="true"
+              ;;
+            collaborators)
+              perm=$(gh api "repos/${REPO_FULL}/collaborators/${author}/permission" --jq '.permission' 2>/dev/null || echo "none")
+              if [ "$perm" = "admin" ] || [ "$perm" = "write" ] || [ "$perm" = "maintain" ]; then
+                allowed="true"
+              fi
+              ;;
+            owner_only|*)
+              if [ "$author" = "$REPO_OWNER" ]; then
+                allowed="true"
+              fi
+              ;;
+          esac
+
+          echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
+          if [ "$allowed" != "true" ]; then
+            echo "Skipping: author '$author' not allowed under filter '$AUTHOR_FILTER'."
+          fi
+
+      - name: 📥 Checkout repository
+        if: ${{ steps.author_check.outputs.allowed == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📦 Install GitHub Copilot CLI
+        if: ${{ steps.author_check.outputs.allowed == 'true' }}
+        run: |
+          curl -fsSL https://gh.io/copilot-install | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "--- Copilot CLI version ---"
+          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+
+      - name: 🔍 Review PR code changes
+        if: ${{ steps.author_check.outputs.allowed == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+          PR_TITLE: ${{ inputs.pr_title || github.event.pull_request.title }}
+          PR_AUTHOR: ${{ inputs.pr_author || github.event.pull_request.user.login }}
+          BASE_REF: ${{ inputs.base_ref || github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ inputs.head_ref || github.event.pull_request.head.ref }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+
+          copilot -p "
+          You are an expert Code Reviewer for the repository '${{ github.repository }}'.
+          Your job is to review the code changes in a pull request and provide constructive,
+          actionable feedback as inline review comments and a summary review.
+
+          PULL REQUEST DETAILS:
+          - Number: #$PR_NUMBER
+          - Title: $PR_TITLE
+          - Author: @$PR_AUTHOR
+          - Base branch: $BASE_REF
+          - Head branch: $HEAD_REF
+
+          Follow these steps IN ORDER:
+
+          ──────────────────────────────────────────────
+          STEP 1 — UNDERSTAND THE PROJECT CONTEXT
+          ──────────────────────────────────────────────
+          - Read the repository README to understand the project, its architecture, and conventions.
+          - Read AGENTS.md, CONTRIBUTING.md, or any coding standards files if they exist.
+          - Identify the languages, frameworks, and key patterns used.
+
+          ──────────────────────────────────────────────
+          STEP 2 — ANALYZE THE FULL DIFF
+          ──────────────────────────────────────────────
+          - Use the GitHub MCP Server to get the complete diff of PR #$PR_NUMBER.
+          - Read each changed file carefully. Understand what the change does and why.
+          - If the diff is large, prioritize:
+            a) New files and new public APIs
+            b) Security-sensitive changes (auth, crypto, input handling)
+            c) Complex logic changes
+            d) Configuration and infrastructure changes
+
+          ──────────────────────────────────────────────
+          STEP 3 — REVIEW FOR CORRECTNESS
+          ──────────────────────────────────────────────
+          Check each change for:
+          - Logic errors or off-by-one mistakes
+          - Unhandled edge cases (null, empty, negative, overflow)
+          - Missing error handling or silent failures
+          - Broken or missing return values
+          - Race conditions or concurrency issues
+          - Incorrect API usage based on the framework conventions
+
+          ──────────────────────────────────────────────
+          STEP 4 — REVIEW FOR SECURITY
+          ──────────────────────────────────────────────
+          Check for:
+          - SQL injection, XSS, command injection, path traversal
+          - Hardcoded secrets, API keys, or credentials
+          - Missing input validation or sanitization
+          - Missing authentication or authorization checks
+          - Insecure cryptographic patterns
+          - Sensitive data exposure in logs or error messages
+          - CSRF vulnerabilities on state-changing operations
+
+          ──────────────────────────────────────────────
+          STEP 5 — REVIEW FOR PERFORMANCE
+          ──────────────────────────────────────────────
+          Check for:
+          - N+1 query patterns
+          - Missing database indexes for new queries
+          - Unbounded loops or missing pagination
+          - Large memory allocations or unnecessary copies
+          - Missing caching opportunities
+          - Blocking operations in async contexts
+
+          ──────────────────────────────────────────────
+          STEP 6 — REVIEW FOR MAINTAINABILITY
+          ──────────────────────────────────────────────
+          Check for:
+          - Code duplication that should be extracted
+          - Functions or methods that are too long (>50 lines)
+          - Poor naming of variables, functions, or classes
+          - Missing or outdated comments on complex logic
+          - Inconsistency with the project's existing code style
+          - Missing type annotations or type safety
+
+          ──────────────────────────────────────────────
+          STEP 7 — POST INLINE REVIEW COMMENTS
+          ──────────────────────────────────────────────
+          For each issue found, use the GitHub MCP Server to create an inline review comment
+          on the specific file and line where the issue exists.
+
+          Each comment MUST follow this format:
+          **[SEVERITY]** Brief title
+
+          Explanation of the issue and why it matters.
+
+          \`\`\`suggestion
+          // Suggested fix (if applicable)
+          \`\`\`
+
+          Severity levels:
+          - 🔴 **Critical** — Must fix before merge (security, data loss, crash)
+          - 🟡 **Warning** — Should fix (bugs, performance, bad patterns)
+          - 🔵 **Suggestion** — Nice to have (style, naming, readability)
+          - 💡 **Nitpick** — Optional (minor style preferences)
+
+          IMPORTANT:
+          - Only post comments for genuine issues. Do NOT comment on correct code.
+          - Maximum 15 inline comments to avoid overwhelming the author.
+          - Prioritize 🔴 and 🟡 issues. Only include 🔵 and 💡 if there are few real issues.
+
+          ──────────────────────────────────────────────
+          STEP 8 — POST REVIEW SUMMARY
+          ──────────────────────────────────────────────
+          Use the GitHub MCP Server to add a comment on PR #$PR_NUMBER with an overall
+          review summary:
+
+          > 🔍 **Code Review Summary**
+          >
+          > **Overall Assessment:** [Looks good / Needs minor changes / Needs significant changes]
+          >
+          > | Category | Issues Found |
+          > |----------|-------------|
+          > | 🔴 Critical | X |
+          > | 🟡 Warning | X |
+          > | 🔵 Suggestion | X |
+          > | 💡 Nitpick | X |
+          >
+          > **Key Findings:**
+          > - (list the top 3-5 most important items)
+          >
+          > **What looks good:**
+          > - (list 2-3 positive aspects of the code)
+          >
+          > ---
+          > 🤖 *This review was automatically generated by Copilot CLI.*
+          > *Please use your judgment — AI reviews complement but don't replace human review.*
+
+          IMPORTANT GUIDELINES:
+          - Be constructive, not critical. The goal is to help, not to lecture.
+          - Acknowledge good practices when you see them.
+          - If the PR is small or trivial, keep the review brief.
+          - If the code is clean and well-written, say so — not every PR needs criticism.
+          - NEVER approve or request changes via the review API — only leave comments.
+          - Focus on objective issues, not style preferences (unless they violate project conventions).
+          " --allow-all-tools --model claude-opus-4.6
+          exit_code=$?
+
+          if [ $exit_code -ne 0 ]; then
+            echo "::error::Copilot CLI failed with exit code $exit_code for PR #$PR_NUMBER"
+            exit $exit_code
+          fi
+
+          echo "✅ Code review completed for PR #$PR_NUMBER"

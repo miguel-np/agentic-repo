@@ -19,6 +19,14 @@ on:
           - the-suggester-discussion-mode
           - label-beautifier
           - continuous-docs
+          - pr-quality-enhancer
+          - pr-code-reviewer
+          - stale-manager
+          - release-notes-generator
+          - discussion-to-issue
+          - duplicate-issue-detector
+          - dependency-update-advisor
+          - readme-health-check
       create_pr:
         description: 'Create a PR instead of pushing directly to main'
         required: true

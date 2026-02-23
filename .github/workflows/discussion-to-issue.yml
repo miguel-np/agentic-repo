@@ -1,0 +1,185 @@
+name: 💬 Discussion to Issue Converter
+
+on:
+  discussion:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      discussion_number:
+        description: 'Discussion number to convert'
+        required: true
+        type: string
+      label_trigger:
+        description: 'Label that triggers conversion (must match the label added)'
+        required: false
+        type: string
+        default: '✅ accepted'
+  workflow_call:
+    inputs:
+      discussion_number:
+        description: 'Discussion number to convert'
+        required: true
+        type: string
+      label_trigger:
+        description: 'Label that triggers conversion'
+        required: false
+        type: string
+        default: '✅ accepted'
+    secrets:
+      COPILOT_PAT:
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+  discussions: write
+
+jobs:
+  convert-discussion:
+    name: 💬 Convert Discussion to Issue
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔐 Check trigger label
+        id: label_check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          LABEL_NAME: ${{ github.event.label.name }}
+          LABEL_TRIGGER: ${{ inputs.label_trigger || '✅ accepted' }}
+          DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
+          INPUT_DISCUSSION: ${{ inputs.discussion_number }}
+        run: |
+          if [ "$EVENT_NAME" = "discussion" ]; then
+            # Only proceed if the label that was added matches the trigger label
+            if [ "$LABEL_NAME" = "$LABEL_TRIGGER" ]; then
+              echo "proceed=true" >> "$GITHUB_OUTPUT"
+              echo "discussion_number=$DISCUSSION_NUMBER" >> "$GITHUB_OUTPUT"
+            else
+              echo "Skipping: label '$LABEL_NAME' does not match trigger '$LABEL_TRIGGER'."
+              echo "proceed=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # workflow_dispatch or workflow_call: always proceed
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            echo "discussion_number=$INPUT_DISCUSSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 📥 Checkout repository
+        if: ${{ steps.label_check.outputs.proceed == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: 📦 Install GitHub Copilot CLI
+        if: ${{ steps.label_check.outputs.proceed == 'true' }}
+        run: |
+          curl -fsSL https://gh.io/copilot-install | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "--- Copilot CLI version ---"
+          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+
+      - name: 💬 Convert discussion to issue
+        if: ${{ steps.label_check.outputs.proceed == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          DISCUSSION_NUMBER: ${{ steps.label_check.outputs.discussion_number }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+
+          copilot -p "
+          You are a Discussion-to-Issue Converter for the repository '${{ github.repository }}'.
+          Your job is to take a GitHub Discussion that has been accepted and create a
+          well-structured issue from it, preserving all context and maintaining bidirectional links.
+
+          DISCUSSION NUMBER: #$DISCUSSION_NUMBER
+
+          Follow these steps IN ORDER:
+
+          ──────────────────────────────────────────────
+          STEP 1 — READ THE DISCUSSION
+          ──────────────────────────────────────────────
+          - Use the GitHub MCP Server to get the full details of discussion #$DISCUSSION_NUMBER.
+          - Read the title, body, author, labels, and all comments/replies.
+          - Note the discussion category and any consensus reached in the comments.
+
+          ──────────────────────────────────────────────
+          STEP 2 — CHECK FOR EXISTING ISSUE
+          ──────────────────────────────────────────────
+          - Use the GitHub MCP Server to search for existing issues that reference
+            this discussion (search for 'discussion #$DISCUSSION_NUMBER' or the discussion title).
+          - If an issue already exists that was created from this discussion, STOP and post
+            a comment on the discussion: 'An issue already exists: #ISSUE_NUMBER'.
+          - Only proceed if no duplicate issue is found.
+
+          ──────────────────────────────────────────────
+          STEP 3 — UNDERSTAND THE LABELS
+          ──────────────────────────────────────────────
+          - Use the GitHub MCP Server to list ALL available labels in this repository.
+          - Note the labels on the discussion — these will be transferred to the issue.
+
+          ──────────────────────────────────────────────
+          STEP 4 — CREATE THE ISSUE
+          ──────────────────────────────────────────────
+          Create a new issue with:
+
+          **Title:**
+          - Use the discussion title as a base
+          - Start with a relevant emoji if the discussion title doesn't have one
+          - Use imperative mood if needed ('Add X' not 'Adding X')
+
+          **Body:**
+          ## 📋 Description
+          Synthesize the discussion into a clear, actionable description.
+          Include the key points from the discussion body and important comments.
+
+          ## 🎯 Motivation
+          Why is this needed? Extract the reasoning from the discussion.
+
+          ## 📐 Proposed Solution
+          If the discussion reached consensus on an approach, describe it.
+          If multiple approaches were discussed, list them with pros/cons.
+
+          ## 📎 Context
+          - Created from Discussion #$DISCUSSION_NUMBER
+          - Original author: @DISCUSSION_AUTHOR
+          - Discussion participants: @user1, @user2 (list active commenters)
+
+          ---
+          > 💬 *This issue was automatically created from [Discussion #$DISCUSSION_NUMBER](link).
+          > Original author: @DISCUSSION_AUTHOR*
+
+          ──────────────────────────────────────────────
+          STEP 5 — ASSIGN LABELS
+          ──────────────────────────────────────────────
+          - Transfer all labels from the discussion to the new issue.
+          - Remove the '🤖 copilot-suggestion' label if present (it applies to discussions, not issues).
+          - Add any additional labels that make sense based on the issue content.
+          - Ensure 1-3 labels are assigned.
+
+          ──────────────────────────────────────────────
+          STEP 6 — LINK BACK TO THE DISCUSSION
+          ──────────────────────────────────────────────
+          Use the GitHub MCP Server to add a comment on the original discussion #$DISCUSSION_NUMBER:
+
+          > ✅ **Issue created!**
+          >
+          > This discussion has been converted to an actionable issue: #ISSUE_NUMBER
+          >
+          > The issue preserves the context from this discussion and is ready for implementation.
+          >
+          > ---
+          > 🤖 *Automatically converted by Copilot CLI*
+
+          IMPORTANT GUIDELINES:
+          - NEVER lose information from the discussion — synthesize, don't truncate
+          - Preserve attribution — credit the original author and active participants
+          - The issue should be ACTIONABLE — not just a copy of the discussion
+          - If the discussion is vague, structure it into clear requirements
+          - If the discussion has no clear consensus, note the open questions in the issue
+          " --allow-all-tools --model claude-opus-4.6
+          exit_code=$?
+
+          if [ $exit_code -ne 0 ]; then
+            echo "::error::Copilot CLI failed with exit code $exit_code for discussion #$DISCUSSION_NUMBER"
+            exit $exit_code
+          fi
+
+          echo "✅ Discussion #$DISCUSSION_NUMBER converted to issue"

@@ -1,0 +1,22 @@
+name: 🏥 README Health Check
+
+on:
+  schedule:
+    - cron: "0 10 1 * *"
+  workflow_dispatch:
+    inputs:
+      fix_mode:
+        description: 'Report only or auto-fix issues'
+        required: false
+        default: 'report-only'
+        type: choice
+        options:
+          - report-only
+          - auto-fix
+
+jobs:
+  check:
+    uses: __OWNER__/agentic-repo/.github/workflows/readme-health-check.yml@main
+    with:
+      fix_mode: ${{ inputs.fix_mode || 'report-only' }}
+    secrets: inherit

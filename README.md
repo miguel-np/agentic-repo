@@ -1,6 +1,6 @@
 # Agentic Repo
 
-A collection of reusable GitHub Actions workflows that use **GitHub Copilot CLI** to automate common repository maintenance tasks — issue triage, labeling, documentation sync, and more.
+A collection of reusable GitHub Actions workflows that use **GitHub Copilot CLI** to automate common repository maintenance tasks — issue triage, labeling, code review, release management, documentation sync, and more.
 
 ## Workflows
 
@@ -11,6 +11,14 @@ A collection of reusable GitHub Actions workflows that use **GitHub Copilot CLI*
 | **Copilot Suggester** | Manual | Scans the codebase and opens GitHub Discussion ideas for security, performance, UX, and other improvements |
 | **Label Beautifier** | Manual | Renames labels to follow a consistent emoji + color scheme; supports dry-run mode |
 | **Continuous Documentation** | PR opened | Detects documentation drift between code changes and README / API docs; pushes fixes directly to the PR branch |
+| **PR Quality Enhancer** | PR opened | Enhances PR titles and descriptions with structured context, code references, and summary of changes |
+| **PR Code Reviewer** | PR opened / updated | AI-powered code review with inline comments on changed files and an overall summary |
+| **Stale Manager** | Scheduled (weekly) / Manual | Warns and closes inactive issues and PRs after configurable inactivity periods; supports dry-run mode |
+| **Release Notes Generator** | Release created / Manual | Generates structured release notes from commits and merged PRs between tags |
+| **Discussion to Issue Converter** | Discussion labeled / Manual | Converts accepted Discussions into actionable issues with context preservation |
+| **Duplicate Issue Detector** | Issue opened | Analyzes new issues against existing open issues and flags potential duplicates |
+| **Dependency Update Advisor** | Scheduled (weekly) / Manual | Audits project dependencies for outdated packages and security vulnerabilities |
+| **README Health Check** | Scheduled (monthly) / Manual | Checks README accuracy and completeness against the actual codebase; supports auto-fix mode |
 | **Workflow Installer** | Manual | Deploys the caller workflows from this repo to one or more target repositories |
 | **Lint Workflows** | Push / PR | Validates YAML syntax of all workflow files |
 
@@ -60,7 +68,7 @@ Copy the workflows from `.github/workflows/` directly if you prefer to own the f
 
 ### Author filter
 
-By default, the **Issue Quality Enhancer**, **Smart Labeler**, and **Continuous Documentation** workflows only run when the issue/PR author is the repository owner. You can change this behavior using the `author_filter` input:
+By default, the **Issue Quality Enhancer**, **Smart Labeler**, **Continuous Documentation**, **PR Quality Enhancer**, **PR Code Reviewer**, and **Duplicate Issue Detector** workflows only run when the issue/PR author is the repository owner. You can change this behavior using the `author_filter` input:
 
 | Value | Behavior |
 |---|---|
@@ -109,6 +117,38 @@ Run manually. Set `dry_run: true` to preview proposed changes before applying th
 
 Triggers automatically on pull requests that modify code files. Also available as a standalone workflow (no caller needed). Compares the diff against README sections and API docs, edits files directly in the PR branch to fix drift, and posts a summary comment.
 
+### PR Quality Enhancer
+
+Triggers automatically when a pull request is opened. Analyzes the code diff and branch context to enhance the PR title and body with a structured description, summary of changes, code references, and suggested reviewers.
+
+### PR Code Reviewer
+
+Triggers when a pull request is opened or updated. Reviews all changed files and posts inline comments on specific lines highlighting bugs, security concerns, performance issues, and style improvements. Also posts an overall review summary comment.
+
+### Stale Manager
+
+Runs weekly (Monday 9:00 UTC) on a schedule or manually. Scans all open issues and PRs, warns authors of items inactive for a configurable number of days (default 30), and closes items that remain inactive after the warning period (default 14 additional days). Dry-run mode is enabled by default for safe previewing.
+
+### Release Notes Generator
+
+Triggers when a new release is created or can be run manually with a specific tag. Analyzes all commits and merged PRs between the specified tag and the previous tag (auto-detected or manually specified), then updates the release body with categorized, structured notes.
+
+### Discussion to Issue Converter
+
+Triggers when a Discussion is labeled (default trigger label: `✅ accepted`) or can be run manually with a discussion number. Creates a new issue preserving the discussion context, links the issue back to the discussion, and adds a comment to the discussion pointing to the new issue.
+
+### Duplicate Issue Detector
+
+Triggers when a new issue is opened. Compares the issue title and body against all open issues using semantic similarity. If potential duplicates are found, posts a comment listing them with similarity scores and links. Does not automatically close issues — leaves the decision to maintainers.
+
+### Dependency Update Advisor
+
+Runs weekly (Monday 10:00 UTC) on a schedule or manually. Scans the repository for dependency manifests (package.json, requirements.txt, Gemfile, go.mod, etc.), checks for outdated packages and known security vulnerabilities, and opens a summary issue with prioritized update recommendations.
+
+### README Health Check
+
+Runs monthly (1st of each month at 10:00 UTC) on a schedule or manually. Compares README content against the actual codebase to detect outdated installation instructions, missing features, broken references, and inaccurate project structure sections. In `auto-fix` mode, it pushes corrections directly; in `report-only` mode (default), it opens an issue with findings.
+
 ### Workflow Installer
 
 Run manually. Installs or converts workflows in one or more target repositories. If a full standalone workflow already exists, it is converted to a caller automatically. Accepts full GitHub URLs, `owner/repo`, or just `repo` (defaults to the current owner).
@@ -124,6 +164,14 @@ agentic-repo/
 │       ├── the-suggester-discussion-mode.yml
 │       ├── label-beautifier.yml
 │       ├── continuous-docs.yml
+│       ├── pr-quality-enhancer.yml
+│       ├── pr-code-reviewer.yml
+│       ├── stale-manager.yml
+│       ├── release-notes-generator.yml
+│       ├── discussion-to-issue.yml
+│       ├── duplicate-issue-detector.yml
+│       ├── dependency-update-advisor.yml
+│       ├── readme-health-check.yml
 │       ├── workflow-installer.yml
 │       └── lint.yml
 ├── caller-workflows/
@@ -131,7 +179,15 @@ agentic-repo/
 │   ├── smart-labeler.yml
 │   ├── the-suggester-discussion-mode.yml
 │   ├── label-beautifier.yml
-│   └── continuous-docs.yml
+│   ├── continuous-docs.yml
+│   ├── pr-quality-enhancer.yml
+│   ├── pr-code-reviewer.yml
+│   ├── stale-manager.yml
+│   ├── release-notes-generator.yml
+│   ├── discussion-to-issue.yml
+│   ├── duplicate-issue-detector.yml
+│   ├── dependency-update-advisor.yml
+│   └── readme-health-check.yml
 ├── README.md
 └── README.es.md
 ```

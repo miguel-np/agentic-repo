@@ -1,0 +1,23 @@
+name: 📦 Dependency Update Advisor
+
+on:
+  schedule:
+    - cron: "0 10 * * 1"
+  workflow_dispatch:
+    inputs:
+      severity_filter:
+        description: 'Minimum severity to report'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - critical-only
+          - security-only
+
+jobs:
+  advise:
+    uses: __OWNER__/agentic-repo/.github/workflows/dependency-update-advisor.yml@main
+    with:
+      severity_filter: ${{ inputs.severity_filter || 'all' }}
+    secrets: inherit
