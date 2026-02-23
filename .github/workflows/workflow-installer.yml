@@ -104,7 +104,7 @@ jobs:
             fi
 
             TARGET_BRANCH="${BRANCH:-main}"
-            
+
             # Track what we did for the PR description
             INSTALLED_NEW=""
             CONVERTED=""
@@ -129,11 +129,11 @@ jobs:
                   ALREADY_CALLER="${ALREADY_CALLER}\n- **${FILENAME%.yml}** — already centralized ✅"
                   continue
                 fi
-                
+
                 # Check if it's a full workflow (contains copilot -p or the main logic)
                 if echo "$EXISTING_CONTENT" | grep -q "copilot -p\|Install GitHub Copilot CLI"; then
                   echo "  🔄 Converting full workflow to caller: $FILENAME"
-                  
+
                   # Update existing file with caller version
                   gh api "repos/${REPO}/contents/${TARGET_PATH}" \
                     -X PUT \

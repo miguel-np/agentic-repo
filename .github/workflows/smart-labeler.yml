@@ -172,7 +172,7 @@ jobs:
              - Is it a good first issue for newcomers? → 'good first issue' label
              - Is it about UI/UX? → 'design' or 'ux' label (if exists)
              - Is it about refactoring? → 'refactoring' label (if exists)
-             
+
              For Pull Requests specifically:
              - Does it fix a bug? → 'bug' label
              - Does it add a feature? → 'enhancement' label

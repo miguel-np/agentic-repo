@@ -105,7 +105,7 @@ jobs:
           COLORS (use a consistent, meaningful color scheme):
           - Bugs/errors: red tones (d73a4a, e11d48)
           - Enhancements/features: green tones (0e8a16, 16a34a)
-          - Documentation: blue tones (0075ca, 0284c7) 
+          - Documentation: blue tones (0075ca, 0284c7)
           - Security: orange/red tones (e99695, f97316)
           - Performance: yellow tones (f9d0c4, eab308)
           - Testing: purple tones (d876e3, a855f7)
