@@ -86,10 +86,13 @@ jobs:
             echo "📦 Installing workflows to: $REPO"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+            # Always resolve the default branch so TARGET_BRANCH is never hardcoded.
+            DEFAULT_BRANCH=$(gh api "repos/${REPO}" --jq '.default_branch' 2>/dev/null || echo "main")
+            BRANCH=""
+
             if [ "$CREATE_PR" = "true" ]; then
               # Create a branch for the PR
               BRANCH="agentic-workflows/install-$(date +%Y%m%d%H%M%S)"
-              DEFAULT_BRANCH=$(gh api "repos/${REPO}" --jq '.default_branch')
 
               # Get the SHA of the default branch
               SHA=$(gh api "repos/${REPO}/git/ref/heads/${DEFAULT_BRANCH}" --jq '.object.sha')
@@ -104,7 +107,7 @@ jobs:
               echo "🌿 Created branch: $BRANCH"
             fi
 
-            TARGET_BRANCH="${BRANCH:-main}"
+            TARGET_BRANCH="${BRANCH:-$DEFAULT_BRANCH}"
 
             # Track what we did for the PR description
             INSTALLED_NEW=""

@@ -47,13 +47,14 @@ on:
         description: 'Copilot model to use'
         required: false
         type: string
-        default: 'claude-sonnet-4'
+        default: 'claude-sonnet-4.6'
     secrets:
       COPILOT_PAT:
         required: true
 
 permissions:
   contents: read
+  issues: write
   discussions: write
 
 jobs:
@@ -91,7 +92,7 @@ jobs:
           SUGGESTION_TYPE: ${{ inputs.suggestion_type || 'all' }}
           ANALYZE_UI: ${{ inputs.analyze_ui || 'false' }}
           REPO_NAME: ${{ github.repository }}
-          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4.6' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 

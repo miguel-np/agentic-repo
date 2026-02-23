@@ -70,15 +70,31 @@ jobs:
           token: ${{ secrets.COPILOT_PAT || github.token }}
 
       - name: "\u23F3 Check if Issue Quality Enhancer already handled this"
-        if: steps.author_check.outputs.allowed == 'true' && github.event_name == 'issues' && github.event.action == 'opened'
+        if: steps.author_check.outputs.allowed == 'true' && github.event_name == 'issues' && (github.event.action == 'opened' || github.event.action == 'edited')
         id: enhancer_check
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || github.token }}
           REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ inputs.item_number || github.event.issue.number }}
+          EVENT_ACTION: ${{ github.event.action }}
         run: |
-          # Poll for up to 90 seconds (6 attempts × 15s) waiting for the Issue Quality Enhancer
-          # to post its comment. A fixed sleep is fragile — the enhancer can take 30-60s.
+          # On 'edited' events the issue-quality-enhancer may have just pushed its edit,
+          # so its comment is very likely already present — check immediately with no delay.
+          # On 'opened' events, poll for up to 90 seconds (6 attempts × 15s) because the
+          # enhancer and the labeler start in parallel and the enhancer can take 30-60s.
+          if [ "$EVENT_ACTION" = "edited" ]; then
+            comments=$(gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/comments" --jq '.[].body' 2>/dev/null || echo "")
+            if echo "$comments" | grep -q "Issue enhanced!"; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "Issue Quality Enhancer already processed issue #${ISSUE_NUMBER} (edit triggered by enhancer). Skipping smart labeling."
+              exit 0
+            fi
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Proceeding: edited event but no enhancer comment found on issue #${ISSUE_NUMBER}."
+            exit 0
+          fi
+
+          # 'opened' path: poll actively
           MAX_ATTEMPTS=6
           SLEEP_SECONDS=15
           for i in $(seq 1 $MAX_ATTEMPTS); do

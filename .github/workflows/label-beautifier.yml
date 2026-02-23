@@ -22,7 +22,7 @@ on:
         description: 'Copilot model to use'
         required: false
         type: string
-        default: 'claude-sonnet-4'
+        default: 'claude-sonnet-4.6'
     secrets:
       COPILOT_PAT:
         required: true
@@ -49,7 +49,7 @@ jobs:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
           DRY_RUN: ${{ inputs.dry_run || 'true' }}
           REPO_NAME: ${{ github.repository }}
-          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4.6' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 

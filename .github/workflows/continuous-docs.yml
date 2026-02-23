@@ -50,7 +50,7 @@ on:
         description: 'Copilot model to use'
         required: false
         type: string
-        default: 'claude-sonnet-4'
+        default: 'claude-sonnet-4.6'
     secrets:
       COPILOT_PAT:
         required: true
@@ -102,7 +102,7 @@ jobs:
           PR_AUTHOR: ${{ inputs.pr_author || github.event.pull_request.user.login }}
           HEAD_REF: ${{ inputs.head_ref || github.event.pull_request.head.ref }}
           REPO_NAME: ${{ github.repository }}
-          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4.6' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
@@ -202,7 +202,11 @@ jobs:
           After editing the files, use the GitHub MCP Server to push the changes
           to the HEAD branch of the PR with a commit message like:
 
-            📚 docs: update documentation to match code changes
+            📚 docs: update documentation to match code changes [skip ci]
+
+          IMPORTANT: The commit message MUST include the '[skip ci]' trailer at the end.
+          This prevents CI workflows (including this one) from re-triggering on the
+          documentation commit, avoiding unnecessary extra runs and resource consumption.
 
           Only commit files that you actually modified. If no documentation drift was found,
           DO NOT create an empty commit.

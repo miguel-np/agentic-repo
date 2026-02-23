@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened]
 
+concurrency:
+  group: pr-quality-enhancer-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   enhance:
     uses: __OWNER__/agentic-repo/.github/workflows/pr-quality-enhancer.yml@main
