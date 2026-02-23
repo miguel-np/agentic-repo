@@ -59,6 +59,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# Cancel in-progress runs for the same PR to avoid wasting Actions minutes
+# when multiple commits are pushed in quick succession.
+concurrency:
+  group: continuous-docs-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
+
 jobs:
   continuous-docs:
     name: "\uD83D\uDCDA Check & Improve Documentation"

@@ -43,6 +43,12 @@ permissions:
   contents: read
   pull-requests: write
 
+# Cancel in-progress runs for the same PR to avoid wasting Actions minutes
+# when multiple commits are pushed in quick succession.
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
+
 jobs:
   review-pr:
     name: "\uD83D\uDD0D AI Code Review"

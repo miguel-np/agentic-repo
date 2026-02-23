@@ -47,6 +47,11 @@ permissions:
   issues: write
   pull-requests: write
 
+# Prevent duplicate labeling runs for the same item when edited rapidly.
+concurrency:
+  group: smart-labeler-${{ github.event.issue.number || github.event.pull_request.number || inputs.item_number }}
+  cancel-in-progress: true
+
 jobs:
   smart-label:
     name: "\uD83C\uDFF7\uFE0F Analyze and Label"
@@ -72,17 +77,24 @@ jobs:
           REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ inputs.item_number || github.event.issue.number }}
         run: |
-          # Wait briefly to let the Issue Quality Enhancer start first
-          sleep 15
-
-          # Check if the enhancer already labelled this issue by looking for its comment
-          comments=$(gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/comments" --jq '.[].body' 2>/dev/null || echo "")
-          if echo "$comments" | grep -q "Issue enhanced!"; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Issue Quality Enhancer already processed issue #${ISSUE_NUMBER}. Skipping smart labeling."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
+          # Poll for up to 90 seconds (6 attempts × 15s) waiting for the Issue Quality Enhancer
+          # to post its comment. A fixed sleep is fragile — the enhancer can take 30-60s.
+          MAX_ATTEMPTS=6
+          SLEEP_SECONDS=15
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            comments=$(gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/comments" --jq '.[].body' 2>/dev/null || echo "")
+            if echo "$comments" | grep -q "Issue enhanced!"; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "Issue Quality Enhancer already processed issue #${ISSUE_NUMBER} (detected on attempt ${i}). Skipping smart labeling."
+              exit 0
+            fi
+            if [ "$i" -lt "$MAX_ATTEMPTS" ]; then
+              echo "Attempt ${i}/${MAX_ATTEMPTS}: enhancer comment not yet found. Waiting ${SLEEP_SECONDS}s..."
+              sleep $SLEEP_SECONDS
+            fi
+          done
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Issue Quality Enhancer did not process issue #${ISSUE_NUMBER} — proceeding with smart labeling."
 
       - name: "\uD83D\uDCE5 Checkout repository"
         if: steps.author_check.outputs.allowed == 'true' && steps.enhancer_check.outputs.skip != 'true'

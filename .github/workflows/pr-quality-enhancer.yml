@@ -48,6 +48,12 @@ permissions:
   contents: read
   pull-requests: write
 
+# Only run once per PR — if a new push triggers this while a run is in progress,
+# cancel the old one (though this workflow only runs on [opened], the guard is cheap).
+concurrency:
+  group: pr-quality-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
+
 jobs:
   enhance-pr:
     name: "\u2728 Enhance PR Quality"
