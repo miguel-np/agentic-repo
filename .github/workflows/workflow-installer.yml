@@ -76,6 +76,13 @@ jobs:
           for REPO in "${REPOS[@]}"; do
             REPO=$(echo "$REPO" | xargs) # trim whitespace
 
+            # Sanitize: only allow alphanumeric, hyphens, underscores, dots, slashes, and colons
+            # This prevents shell injection via the free-text target_repos input.
+            if [[ ! "$REPO" =~ ^[a-zA-Z0-9_./:@-]+$ ]]; then
+              echo "::error::Invalid repository name: '$REPO' — skipping (contains disallowed characters)"
+              continue
+            fi
+
             # Normalize: strip common GitHub URL prefixes so users can paste full URLs
             REPO="${REPO#https://github.com/}"
             REPO="${REPO#http://github.com/}"

@@ -1,4 +1,4 @@
-name: "\uD83D\uDCA1 Copilot Suggester (Discussion Mode)"
+name: "💡 Copilot Suggester (Discussion Mode)"
 
 on:
   # schedule:
@@ -59,18 +59,18 @@ permissions:
 
 jobs:
   review:
-    name: "\uD83D\uDD0D Analyze & Create Discussion Ideas"
+    name: "🔍 Analyze & Create Discussion Ideas"
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: "\uD83D\uDCE5 Checkout repository"
+      - name: "📥 Checkout repository"
         uses: actions/checkout@v4
 
-      - name: "\uD83D\uDCE6 Install GitHub Copilot CLI"
+      - name: "📦 Install GitHub Copilot CLI"
         uses: ./.github/actions/install-copilot
 
-      - name: "\uD83D\uDD27 Configure Playwright MCP Server"
+      - name: "🔧 Configure Playwright MCP Server"
         if: inputs.analyze_ui != 'false'
         run: |
           mkdir -p ~/.copilot
@@ -86,7 +86,7 @@ jobs:
           EOF
           echo "✅ Playwright MCP Server configured"
 
-      - name: "\uD83E\uDD16 Analyze code and create discussions with Copilot CLI"
+      - name: "🤖 Analyze code and create discussions with Copilot CLI"
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
           SUGGESTION_TYPE: ${{ inputs.suggestion_type || 'all' }}
@@ -179,13 +179,21 @@ jobs:
           PROMPT_EOF
           )
 
-          copilot -p "Repository: ${REPO_NAME}. Categories to analyze: ${CATEGORIES}. ${UI_INSTRUCTION} ${PROMPT}" \
-            --allow-all-tools --model "$MODEL"
-          exit_code=$?
-
-          if [ $exit_code -ne 0 ]; then
-            echo "::error::Copilot CLI failed with exit code $exit_code"
-            exit $exit_code
-          fi
+          MAX_RETRIES=2
+          RETRY_DELAY=10
+          for attempt in $(seq 0 $MAX_RETRIES); do
+            if [ "$attempt" -gt 0 ]; then
+              echo "::warning::Copilot CLI attempt $attempt failed. Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+              RETRY_DELAY=$((RETRY_DELAY * 2))
+            fi
+            timeout 420 copilot -p "Repository: ${REPO_NAME}. Categories to analyze: ${CATEGORIES}. ${UI_INSTRUCTION} ${PROMPT}" \
+              --allow-all-tools --model "$MODEL" && break
+            exit_code=$?
+            if [ "$attempt" -eq "$MAX_RETRIES" ]; then
+              echo "::error::Copilot CLI failed after $((MAX_RETRIES + 1)) attempts (exit code $exit_code)"
+              exit $exit_code
+            fi
+          done
 
           echo "✅ Copilot CLI analysis completed"

@@ -5,7 +5,7 @@ on:
     types: [opened]
 
 concurrency:
-  group: pr-quality-enhancer-${{ github.event.pull_request.number }}
+  group: ${{ github.repository }}-pr-quality-enhancer-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions: {}

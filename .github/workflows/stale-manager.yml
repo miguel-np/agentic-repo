@@ -44,7 +44,7 @@ on:
         description: 'Copilot model to use'
         required: false
         type: string
-        default: 'claude-sonnet-4.6'
+        default: 'gpt-4.1-mini'
     secrets:
       COPILOT_PAT:
         required: true
@@ -62,7 +62,7 @@ jobs:
   manage-stale:
     name: 🧹 Manage Stale Items
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: 📥 Checkout repository
@@ -78,7 +78,7 @@ jobs:
           CLOSE_DAYS: ${{ inputs.close_days || '14' }}
           DRY_RUN: ${{ inputs.dry_run || 'true' }}
           REPO_NAME: ${{ github.repository }}
-          MODEL: ${{ inputs.model || 'claude-sonnet-4.6' }}
+          MODEL: ${{ inputs.model || 'gpt-4.1-mini' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
@@ -138,13 +138,21 @@ jobs:
           PROMPT_EOF
           )
 
-          copilot -p "Repository: ${REPO_NAME}. Stale threshold: ${STALE_DAYS} days. Close threshold: ${CLOSE_DAYS} days after warning. DRY RUN: ${DRY_RUN}. ${PROMPT}" \
-            --allow-all-tools --model "$MODEL"
-          exit_code=$?
-
-          if [ $exit_code -ne 0 ]; then
-            echo "::error::Copilot CLI failed with exit code $exit_code"
-            exit $exit_code
-          fi
+          MAX_RETRIES=2
+          RETRY_DELAY=10
+          for attempt in $(seq 0 $MAX_RETRIES); do
+            if [ "$attempt" -gt 0 ]; then
+              echo "::warning::Copilot CLI attempt $attempt failed. Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+              RETRY_DELAY=$((RETRY_DELAY * 2))
+            fi
+            timeout 600 copilot -p "Repository: ${REPO_NAME}. Stale threshold: ${STALE_DAYS} days. Close threshold: ${CLOSE_DAYS} days after warning. DRY RUN: ${DRY_RUN}. ${PROMPT}" \
+              --allow-all-tools --model "$MODEL" && break
+            exit_code=$?
+            if [ "$attempt" -eq "$MAX_RETRIES" ]; then
+              echo "::error::Copilot CLI failed after $((MAX_RETRIES + 1)) attempts (exit code $exit_code)"
+              exit $exit_code
+            fi
+          done
 
           echo "✅ Stale management completed"

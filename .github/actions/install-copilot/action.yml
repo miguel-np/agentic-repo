@@ -7,7 +7,17 @@ runs:
     - name: Install GitHub Copilot CLI
       shell: bash
       run: |
+        set -euo pipefail
+        echo "Installing GitHub Copilot CLI..."
         curl -fsSL https://gh.io/copilot-install | bash
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+        # Verify installation succeeded
+        if [ ! -x "$HOME/.local/bin/copilot" ]; then
+          echo "::error::Copilot CLI binary not found at $HOME/.local/bin/copilot after installation"
+          exit 1
+        fi
+
         echo "--- Copilot CLI version ---"
         "$HOME/.local/bin/copilot" --version 2>/dev/null || echo "(version flag not supported)"
+        echo "Copilot CLI installed successfully."

@@ -23,7 +23,7 @@ on:
 # Cancel in-progress runs for the same PR to avoid wasting Actions minutes
 # when multiple commits are pushed in quick succession.
 concurrency:
-  group: continuous-docs-${{ github.event.pull_request.number }}
+  group: ${{ github.repository }}-continuous-docs-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions: {}

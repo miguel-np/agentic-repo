@@ -17,7 +17,7 @@ on:
         description: 'Who can trigger this workflow: owner_only, collaborators, or all'
         required: false
         type: string
-        default: 'owner_only'
+        default: 'collaborators'
       model:
         description: 'Copilot model to use'
         required: false
@@ -35,14 +35,14 @@ permissions:
 # Each issue is independent — do not cancel in-progress runs for other issues.
 # Use cancel-in-progress: false to ensure every issue gets checked.
 concurrency:
-  group: duplicate-detector-${{ github.event.issue.number || inputs.issue_number }}
+  group: ${{ github.repository }}-duplicate-detector-${{ github.event.issue.number || inputs.issue_number }}
   cancel-in-progress: false
 
 jobs:
   detect-duplicates:
     name: 🔎 Check for Duplicate Issues
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 7
 
     steps:
       - name: 🔐 Verify author is allowed
@@ -50,7 +50,7 @@ jobs:
         uses: ./.github/actions/check-author
         with:
           author: ${{ inputs.issue_author || github.event.issue.user.login }}
-          author_filter: ${{ inputs.author_filter || 'owner_only' }}
+          author_filter: ${{ inputs.author_filter || 'collaborators' }}
           repo_owner: ${{ github.repository_owner }}
           repo_full: ${{ github.repository }}
           token: ${{ secrets.COPILOT_PAT || github.token }}
@@ -121,13 +121,21 @@ jobs:
           PROMPT_EOF
           )
 
-          copilot -p "Repository: ${REPO_NAME}. Issue number: #${ISSUE_NUMBER}. ${PROMPT}" \
-            --allow-all-tools --model "$MODEL"
-          exit_code=$?
-
-          if [ $exit_code -ne 0 ]; then
-            echo "::error::Copilot CLI failed with exit code $exit_code for issue #$ISSUE_NUMBER"
-            exit $exit_code
-          fi
+          MAX_RETRIES=2
+          RETRY_DELAY=10
+          for attempt in $(seq 0 $MAX_RETRIES); do
+            if [ "$attempt" -gt 0 ]; then
+              echo "::warning::Copilot CLI attempt $attempt failed. Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+              RETRY_DELAY=$((RETRY_DELAY * 2))
+            fi
+            timeout 300 copilot -p "Repository: ${REPO_NAME}. Issue number: #${ISSUE_NUMBER}. ${PROMPT}" \
+              --allow-all-tools --model "$MODEL" && break
+            exit_code=$?
+            if [ "$attempt" -eq "$MAX_RETRIES" ]; then
+              echo "::error::Copilot CLI failed after $((MAX_RETRIES + 1)) attempts (exit code $exit_code) for issue #$ISSUE_NUMBER"
+              exit $exit_code
+            fi
+          done
 
           echo "✅ Duplicate check completed for issue #$ISSUE_NUMBER"

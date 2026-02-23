@@ -8,7 +8,7 @@ on:
 
 # Prevent duplicate labeling runs for the same item when edited rapidly.
 concurrency:
-  group: smart-labeler-${{ github.event.issue.number || github.event.pull_request.number }}
+  group: ${{ github.repository }}-smart-labeler-${{ github.event.issue.number || github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions: {}
