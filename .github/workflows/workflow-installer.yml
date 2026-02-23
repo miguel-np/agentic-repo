@@ -47,7 +47,8 @@ jobs:
           WORKFLOWS: ${{ inputs.workflows }}
           CREATE_PR: ${{ inputs.create_pr }}
         run: |
-          OWNER="0GiS0"
+          # Derive the owner from the repository context so the workflow is not tied to a specific account
+          OWNER="${{ github.repository_owner }}"
 
           # Determine which workflow files to install
           if [ "$WORKFLOWS" = "all" ]; then
@@ -61,13 +62,13 @@ jobs:
           for REPO in "${REPOS[@]}"; do
             REPO=$(echo "$REPO" | xargs) # trim whitespace
 
-            # Strip GitHub URL prefixes if provided (e.g., https://github.com/owner/repo)
+            # Normalize: strip common GitHub URL prefixes so users can paste full URLs
             REPO="${REPO#https://github.com/}"
             REPO="${REPO#http://github.com/}"
             REPO="${REPO#github.com/}"
             REPO="${REPO%/}" # remove trailing slash
 
-            # Add owner if not specified
+            # If no owner is specified, default to the owner of this repository
             if [[ "$REPO" != *"/"* ]]; then
               REPO="${OWNER}/${REPO}"
             fi

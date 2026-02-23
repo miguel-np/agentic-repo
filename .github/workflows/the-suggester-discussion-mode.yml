@@ -75,14 +75,13 @@ jobs:
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
-          # Build the prompt based on suggestion type
+          # Map the user-selected suggestion type to a human-readable category list
           if [ "$SUGGESTION_TYPE" = "all" ]; then
             CATEGORIES="Security, Performance, Refactoring, Testing, Documentation, Architecture, Configuration, Bugs, Maintainability, UX/Design, Favicon, and README improvements"
           else
             CATEGORIES="$SUGGESTION_TYPE"
           fi
 
-          # Copilot CLI analyzes the repo and creates discussions using its GitHub MCP Server
           copilot -p "
           You are analyzing this repository to find improvement suggestions. Follow these steps:
 

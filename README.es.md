@@ -1,122 +1,115 @@
-# 🤖 Agentic Repo
+# Agentic Repo
 
-<div align="center">
+Una colección de GitHub Actions workflows reutilizables que utilizan **GitHub Copilot CLI** para automatizar tareas habituales de mantenimiento de repositorios: triaje de issues, etiquetado, sincronización de documentación y más.
 
-[![YouTube Channel Subscribers](https://img.shields.io/youtube/channel/subscribers/UC140iBrEZbOtvxWsJ-Tb0lQ?style=for-the-badge&logo=youtube&logoColor=white&color=red)](https://www.youtube.com/c/GiselaTorres?sub_confirmation=1)
-[![GitHub followers](https://img.shields.io/github/followers/0GiS0?style=for-the-badge&logo=github&logoColor=white)](https://github.com/0GiS0)
-[![LinkedIn Follow](https://img.shields.io/badge/LinkedIn-Sígueme-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/giselatorresbuitrago/)
-[![X Follow](https://img.shields.io/badge/X-Sígueme-black?style=for-the-badge&logo=x&logoColor=white)](https://twitter.com/0GiS0)
+## Workflows
 
-**🇬🇧 [Read in English](README.md)**
+| Workflow | Disparador | Descripción |
+|---|---|---|
+| **Issue Quality Enhancer** | Issue abierto | Normaliza títulos y cuerpos de issues: traduce al inglés, añade estructura, inserta referencias de código relevantes y asigna etiquetas |
+| **Smart Labeler** | Issue / PR abierto o editado | Analiza el contenido y aplica las etiquetas existentes más apropiadas |
+| **Copilot Suggester** | Manual | Escanea el código y abre ideas en GitHub Discussions sobre seguridad, rendimiento, UX y otras mejoras |
+| **Label Beautifier** | Manual | Renombra las etiquetas para seguir un esquema consistente de emojis y colores; admite modo dry-run |
+| **Continuous Documentation** | PR abierto | Detecta desviación entre cambios de código y README / docs de API; aplica correcciones directamente en la rama del PR |
+| **Workflow Installer** | Manual | Despliega los caller workflows de este repositorio a uno o más repositorios destino |
 
-</div>
+## Cómo funciona
 
----
+Cada workflow está implementado como un **workflow reutilizable** (definido aquí) con un **caller** correspondiente (un archivo de ~15 líneas en `caller-workflows/`). Los repositorios destino solo necesitan el caller ligero; toda la lógica vive en un único lugar y las actualizaciones se aplican automáticamente.
 
-¡Hola developer 👋🏻! Este repositorio contiene una colección de **workflows de GitHub reutilizables** potenciados por **GitHub Copilot CLI** para automatización inteligente de tus repositorios.
+Los workflows utilizan **GitHub Copilot CLI** con el GitHub MCP Server para leer el contexto del repositorio, interactuar con la API de GitHub y producir resultados significativos y adaptados al proyecto.
 
-## ✨ Características
+## Requisitos previos
 
-- **✍️ Issue Quality Enhancer** — Mejora automáticamente títulos y cuerpos de issues, traduce a inglés, añade estructura y referencias al código
-- **🏷️ Smart Labeler** — Analiza issues y PRs para asignar las etiquetas más apropiadas
-- **💡 Copilot Suggester** — Escanea tu código y crea discusiones con ideas de mejora (seguridad, rendimiento, UX, etc.)
-- **🏷️✨ Label Beautifier** — Moderniza todas tus etiquetas con emojis, descripciones y colores consistentes
-- **� Continuous Documentation** — Mejora fragmentos del README y docs de API conforme el código evoluciona; avisa a los autores de PR cuando las explicaciones se desvían de la implementación real
-- **�🚀 Workflow Installer** — Despliega estos workflows a múltiples repos con un solo click
+- Cuenta de GitHub con acceso a **GitHub Copilot**
+- Un **Personal Access Token (PAT)** con permisos de Copilot, almacenado como secreto del repositorio con el nombre `COPILOT_PAT`
 
-## 🛠️ Tecnologías
+## Instalación
 
-- GitHub Actions
-- GitHub Copilot CLI
-- GitHub MCP Server
-- Playwright MCP Server (para análisis de UI)
+### Opción A — Caller workflows (recomendado)
 
-## 📋 Requisitos Previos
-
-- Cuenta de GitHub con **acceso a Copilot**
-- Un **Personal Access Token (PAT)** con permisos de Copilot guardado como secreto `COPILOT_PAT`
-
-## 🚀 Instalación
-
-### Opción 1: Usar como Workflows Reutilizables (Recomendado)
-
-Copia los caller workflows de `caller-workflows/` a `.github/workflows/` de tu repo:
+Copia los archivos de `caller-workflows/` al directorio `.github/workflows/` del repositorio destino:
 
 ```bash
-# Clona este repo
-git clone https://github.com/0GiS0/agentic-repo.git
-
-# Copia los caller workflows que quieras
-cp agentic-repo/caller-workflows/*.yml tu-repo/.github/workflows/
+git clone https://github.com/<tu-org>/agentic-repo.git
+cp agentic-repo/caller-workflows/*.yml <repo-destino>/.github/workflows/
 ```
 
-Cada caller tiene ~15 líneas y referencia la lógica principal aquí, así siempre tienes la última versión.
+A continuación, añade el secreto `COPILOT_PAT` al repositorio destino.
 
-### Opción 2: Usar el Workflow Installer
+### Opción B — Workflow Installer
 
-1. Ve a **Actions** → **🚀 Workflow Installer**
-2. Introduce los repos destino (separados por coma): `repo1, repo2, org/repo3`
-3. Elige qué workflows instalar
-4. Selecciona si crear un PR o pushear directamente
-5. ¡Ejecuta!
+1. Ve a **Actions** → **Workflow Installer**
+2. Introduce los repositorios destino (separados por coma): `owner/repo1, owner/repo2`
+3. Selecciona qué workflows instalar
+4. Elige si crear un PR o hacer push directamente a la rama principal
+5. Ejecuta el workflow
 
-### Opción 3: Copiar Workflows Completos
+### Opción C — Copia completa
 
-Copia los workflows directamente de `.github/workflows/` si prefieres control total.
+Copia los workflows de `.github/workflows/` directamente si prefieres tener la implementación completa bajo tu control.
 
-## 💻 Uso
+## Uso
 
 ### Issue Quality Enhancer
-Se activa automáticamente cuando se abre un issue. Mejora título, cuerpo y añade etiquetas.
+
+Se activa automáticamente cuando se abre un issue. Solo se ejecuta para issues creados por el propietario del repositorio. Mejora el título y el cuerpo, añade etiquetas y deja un comentario de resumen.
 
 ### Smart Labeler
-Se activa al abrir/editar issues o PRs. Analiza el contenido y asigna etiquetas apropiadas.
+
+Se activa en eventos de apertura y edición de issues y PRs. Compara las etiquetas existentes con la lista de etiquetas del repositorio y las ajusta según el contenido.
 
 ### Copilot Suggester
-Ejecución manual desde la pestaña Actions. Analiza tu código y crea discusiones con ideas.
+
+Ejecución manual desde la pestaña Actions. Selecciona la categoría de sugerencias (`all`, `security`, `performance`, etc.). Copilot escanea el código, comprueba si ya existen issues relacionados y abre entradas en Discussions para hallazgos relevantes, omitiendo sugerencias que ya están registradas.
 
 ### Label Beautifier
-Ejecución manual. Usa `dry_run: true` primero para previsualizar cambios.
+
+Ejecución manual. Establece `dry_run: true` para previsualizar los cambios propuestos antes de aplicarlos. Renombra, cambia el color y añade descripciones a todas las etiquetas sin romper las asociaciones existentes con issues y PRs.
 
 ### Continuous Documentation
-Se activa automáticamente en PRs que modifican archivos de código. Compara los cambios con las secciones existentes del README y la documentación de API, sugiere actualizaciones y deja un comentario de revisión cuando la documentación se desvía de la implementación.
 
-## 📁 Estructura del Proyecto
+Se activa automáticamente en pull requests que modifican archivos de código. Compara el diff con las secciones del README y los docs de API, edita los archivos directamente en la rama del PR para corregir la desviación y publica un comentario de resumen.
+
+### Workflow Installer
+
+Ejecución manual. Instala o convierte workflows en uno o más repositorios destino. Si ya existe un workflow standalone completo, se convierte en caller automáticamente.
+
+## Estructura del proyecto
 
 ```
 agentic-repo/
 ├── .github/
 │   └── workflows/
-│       ├── issue-quality-enhancer.yml    # Workflow reutilizable
-│       ├── smart-labeler.yml             # Workflow reutilizable
-│       ├── the-suggester-discussion-mode.yml  # Workflow reutilizable
-│       ├── label-beautifier.yml          # Workflow reutilizable
-│       ├── continuous-docs.yml            # Workflow reutilizable
-│       └── workflow-installer.yml        # Utilidad de instalación
-├── caller-workflows/                     # Callers ligeros para otros repos
+│       ├── issue-quality-enhancer.yml
+│       ├── smart-labeler.yml
+│       ├── the-suggester-discussion-mode.yml
+│       ├── label-beautifier.yml
+│       ├── continuous-docs.yml
+│       └── workflow-installer.yml
+├── caller-workflows/
 │   ├── issue-quality-enhancer.yml
 │   ├── smart-labeler.yml
 │   ├── the-suggester-discussion-mode.yml
 │   ├── label-beautifier.yml
 │   └── continuous-docs.yml
-├── README.md                             # Documentación en inglés
-└── README.es.md                          # Documentación en español
+├── README.md
+└── README.es.md
 ```
 
-## ⚙️ Configuración Requerida en Repos Destino
+## Secreto requerido
 
-Añade este secreto a cualquier repo que use estos workflows:
-- `COPILOT_PAT` — GitHub PAT con acceso a Copilot
+| Secreto | Ámbito | Descripción |
+|---|---|---|
+| `COPILOT_PAT` | Repositorio | PAT de GitHub con acceso a Copilot. Necesario en cada repositorio que invoque estos workflows. |
+
+## Tecnologías
+
+- [GitHub Actions](https://docs.github.com/es/actions) — orquestación de workflows
+- [GitHub Copilot CLI](https://docs.github.com/es/copilot/using-github-copilot/using-github-copilot-in-the-command-line) — ejecución de tareas con IA
+- [GitHub MCP Server](https://github.com/github/github-mcp-server) — acceso estructurado a la API de GitHub para Copilot
+- [Playwright MCP Server](https://github.com/microsoft/playwright-mcp) — automatización de navegador para análisis de UI (Copilot Suggester)
 
 ---
 
-## 🌐 Sígueme
-
-<div align="center">
-
-[![YouTube Channel Subscribers](https://img.shields.io/youtube/channel/subscribers/UC140iBrEZbOtvxWsJ-Tb0lQ?style=for-the-badge&logo=youtube&logoColor=white&color=red)](https://www.youtube.com/c/GiselaTorres?sub_confirmation=1)
-[![GitHub followers](https://img.shields.io/github/followers/0GiS0?style=for-the-badge&logo=github&logoColor=white)](https://github.com/0GiS0)
-[![LinkedIn Follow](https://img.shields.io/badge/LinkedIn-Sígueme-blue?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/giselatorresbuitrago/)
-[![X Follow](https://img.shields.io/badge/X-Sígueme-black?style=for-the-badge&logo=x&logoColor=white)](https://twitter.com/0GiS0)
-
-</div>
+**[Read in English](README.md)**
