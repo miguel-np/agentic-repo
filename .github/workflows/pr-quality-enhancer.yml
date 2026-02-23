@@ -9,15 +9,6 @@ on:
         description: 'Pull request number'
         required: true
         type: string
-      pr_title:
-        description: 'Pull request title'
-        required: true
-        type: string
-      pr_body:
-        description: 'Pull request body'
-        required: false
-        type: string
-        default: ''
       pr_author:
         description: 'Pull request author login'
         required: true

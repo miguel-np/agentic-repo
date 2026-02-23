@@ -10,12 +10,13 @@ concurrency:
   group: pr-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   review:
     uses: __OWNER__/agentic-repo/.github/workflows/pr-code-reviewer.yml@main
     with:
       pr_number: ${{ github.event.pull_request.number }}
-      pr_title: ${{ github.event.pull_request.title }}
       pr_author: ${{ github.event.pull_request.user.login }}
       base_ref: ${{ github.event.pull_request.base.ref }}
       head_ref: ${{ github.event.pull_request.head.ref }}

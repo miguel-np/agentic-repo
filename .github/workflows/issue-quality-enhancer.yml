@@ -9,15 +9,6 @@ on:
         description: 'Issue number to enhance'
         required: true
         type: string
-      issue_title:
-        description: 'Issue title'
-        required: true
-        type: string
-      issue_body:
-        description: 'Issue body'
-        required: false
-        type: string
-        default: ''
       issue_author:
         description: 'Issue author login'
         required: true
@@ -39,6 +30,11 @@ on:
 permissions:
   contents: read
   issues: write
+
+# Each issue is independent — use cancel-in-progress: false so no issue is left unprocessed.
+concurrency:
+  group: issue-quality-enhancer-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
 
 jobs:
   enhance-issue:

@@ -8,13 +8,13 @@ concurrency:
   group: pr-quality-enhancer-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
   enhance:
     uses: __OWNER__/agentic-repo/.github/workflows/pr-quality-enhancer.yml@main
     with:
       pr_number: ${{ github.event.pull_request.number }}
-      pr_title: ${{ github.event.pull_request.title }}
-      pr_body: ${{ github.event.pull_request.body }}
       pr_author: ${{ github.event.pull_request.user.login }}
       base_ref: ${{ github.event.pull_request.base.ref }}
       head_ref: ${{ github.event.pull_request.head.ref }}

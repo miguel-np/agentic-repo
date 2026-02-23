@@ -30,6 +30,8 @@ on:
           - 'false'
           - 'true'
 
+permissions: {}
+
 jobs:
   suggest:
     uses: __OWNER__/agentic-repo/.github/workflows/the-suggester-discussion-mode.yml@main

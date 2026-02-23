@@ -54,6 +54,10 @@ permissions:
   issues: write
   pull-requests: write
 
+concurrency:
+  group: stale-manager
+  cancel-in-progress: true
+
 jobs:
   manage-stale:
     name: 🧹 Manage Stale Items

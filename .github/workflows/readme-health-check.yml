@@ -34,6 +34,10 @@ permissions:
   issues: write
   pull-requests: write
 
+concurrency:
+  group: readme-health-check
+  cancel-in-progress: true
+
 jobs:
   health-check:
     name: 🏥 README Health Check
@@ -45,6 +49,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.COPILOT_PAT || github.token }}
 
       - name: 📦 Install GitHub Copilot CLI
         uses: ./.github/actions/install-copilot

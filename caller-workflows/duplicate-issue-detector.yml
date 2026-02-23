@@ -4,12 +4,12 @@ on:
   issues:
     types: [opened]
 
+permissions: {}
+
 jobs:
   detect:
     uses: __OWNER__/agentic-repo/.github/workflows/duplicate-issue-detector.yml@main
     with:
       issue_number: ${{ github.event.issue.number }}
-      issue_title: ${{ github.event.issue.title }}
-      issue_body: ${{ github.event.issue.body }}
       issue_author: ${{ github.event.issue.user.login }}
     secrets: inherit

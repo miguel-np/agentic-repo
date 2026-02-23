@@ -24,6 +24,8 @@ on:
           - 'true'
           - 'false'
 
+permissions: {}
+
 jobs:
   stale:
     uses: __OWNER__/agentic-repo/.github/workflows/stale-manager.yml@main

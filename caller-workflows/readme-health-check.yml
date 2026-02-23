@@ -14,6 +14,8 @@ on:
           - report-only
           - auto-fix
 
+permissions: {}
+
 jobs:
   check:
     uses: __OWNER__/agentic-repo/.github/workflows/readme-health-check.yml@main

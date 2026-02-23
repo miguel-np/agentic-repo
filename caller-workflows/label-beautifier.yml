@@ -12,6 +12,8 @@ on:
           - 'true'
           - 'false'
 
+permissions: {}
+
 jobs:
   beautify:
     uses: __OWNER__/agentic-repo/.github/workflows/label-beautifier.yml@main

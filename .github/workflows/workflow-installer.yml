@@ -39,6 +39,11 @@ on:
 permissions:
   contents: read
 
+# Prevent simultaneous installer runs that could create conflicting branches or PRs.
+concurrency:
+  group: workflow-installer
+  cancel-in-progress: false
+
 jobs:
   install:
     name: 🚀 Install Workflows
@@ -61,9 +66,9 @@ jobs:
 
           # Determine which workflow files to install
           if [ "$WORKFLOWS" = "all" ]; then
-            FILES=$(ls caller-workflows/*.yml)
+            FILE_GLOB="caller-workflows/*.yml"
           else
-            FILES="caller-workflows/${WORKFLOWS}.yml"
+            FILE_GLOB="caller-workflows/${WORKFLOWS}.yml"
           fi
 
           # Process each target repo
@@ -95,7 +100,10 @@ jobs:
               BRANCH="agentic-workflows/install-$(date +%Y%m%d%H%M%S)"
 
               # Get the SHA of the default branch
-              SHA=$(gh api "repos/${REPO}/git/ref/heads/${DEFAULT_BRANCH}" --jq '.object.sha')
+              SHA=$(gh api "repos/${REPO}/git/ref/heads/${DEFAULT_BRANCH}" --jq '.object.sha') || {
+                echo "❌ Failed to get SHA for default branch '${DEFAULT_BRANCH}' in $REPO — check PAT permissions"
+                continue
+              }
 
               # Create the new branch
               gh api "repos/${REPO}/git/refs" \
@@ -114,17 +122,23 @@ jobs:
             CONVERTED=""
             ALREADY_CALLER=""
 
-            for FILE in $FILES; do
+            for FILE in $FILE_GLOB; do
               FILENAME=$(basename "$FILE")
               # Replace the __OWNER__ placeholder with the actual repository owner
-              CONTENT=$(sed "s/__OWNER__/${OWNER}/g" "$FILE" | base64)
+              CONTENT=$(sed "s/__OWNER__/${OWNER}/g" "$FILE" | base64 -w0)
               TARGET_PATH=".github/workflows/${FILENAME}"
 
               echo "  📄 Processing: $TARGET_PATH"
 
-              # Check if file already exists and analyze its content
-              EXISTING_CONTENT=$(gh api "repos/${REPO}/contents/${TARGET_PATH}?ref=${TARGET_BRANCH}" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-              EXISTING_SHA=$(gh api "repos/${REPO}/contents/${TARGET_PATH}?ref=${TARGET_BRANCH}" --jq '.sha' 2>/dev/null || echo "")
+              # Check if file already exists and analyze its content (single API call)
+              EXISTING_RAW=$(gh api "repos/${REPO}/contents/${TARGET_PATH}?ref=${TARGET_BRANCH}" 2>/dev/null || echo "")
+              if [ -n "$EXISTING_RAW" ]; then
+                EXISTING_CONTENT=$(echo "$EXISTING_RAW" | jq -r '.content // empty' | base64 -d 2>/dev/null || echo "")
+                EXISTING_SHA=$(echo "$EXISTING_RAW" | jq -r '.sha // empty')
+              else
+                EXISTING_CONTENT=""
+                EXISTING_SHA=""
+              fi
 
               if [ -n "$EXISTING_CONTENT" ]; then
                 # Check if it's already a caller (uses reusable workflow from agentic-repo)
@@ -211,13 +225,13 @@ jobs:
               PR_BODY="${PR_BODY}"$'\n\n'"---"
               PR_BODY="${PR_BODY}"$'\n'"> 🤖 *This PR was automatically created by the [Workflow Installer](https://github.com/${OWNER}/agentic-repo)*"
 
-              # Create PR
+              # Create PR (capture only stdout; stderr goes to log separately)
               PR_URL=$(gh pr create \
                 --repo "$REPO" \
                 --base "$DEFAULT_BRANCH" \
                 --head "$BRANCH" \
                 --title "🤖 Centralize agentic workflows from agentic-repo" \
-                --body "$PR_BODY" 2>&1) || {
+                --body "$PR_BODY" 2>/dev/null) || {
                 echo "❌ Failed to create PR in $REPO"
                 continue
               }
