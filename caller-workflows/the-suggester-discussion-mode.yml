@@ -22,13 +22,13 @@ on:
           - ux-design
           - readme
       analyze_ui:
-        description: 'Attempt to build, run, and analyze the application UI via Playwright'
+        description: 'Attempt to build, run, and analyze the application UI via Playwright (costly — adds ~3-5 min and extra tokens)'
         required: false
-        default: 'true'
+        default: 'false'
         type: choice
         options:
-          - 'true'
           - 'false'
+          - 'true'
 
 jobs:
   suggest:

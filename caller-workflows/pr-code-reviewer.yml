@@ -4,6 +4,12 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+# Cancel in-progress runs for the same PR to avoid wasting Actions minutes
+# when multiple commits are pushed in quick succession.
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   review:
     uses: __OWNER__/agentic-repo/.github/workflows/pr-code-reviewer.yml@main

@@ -24,13 +24,13 @@ on:
           - ux-design
           - readme
       analyze_ui:
-        description: 'Attempt to build, run, and analyze the application UI via Playwright'
+        description: 'Attempt to build, run, and analyze the application UI via Playwright (costly — adds ~3-5 min and extra tokens)'
         required: false
-        default: 'true'
+        default: 'false'
         type: choice
         options:
-          - 'true'
           - 'false'
+          - 'true'
   workflow_call:
     inputs:
       suggestion_type:
@@ -39,10 +39,10 @@ on:
         type: string
         default: 'all'
       analyze_ui:
-        description: 'Attempt to build, run, and analyze the application UI via Playwright'
+        description: 'Attempt to build, run, and analyze the application UI via Playwright (costly — adds ~3-5 min and extra tokens)'
         required: false
         type: string
-        default: 'true'
+        default: 'false'
       model:
         description: 'Copilot model to use'
         required: false
@@ -89,7 +89,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
           SUGGESTION_TYPE: ${{ inputs.suggestion_type || 'all' }}
-          ANALYZE_UI: ${{ inputs.analyze_ui || 'true' }}
+          ANALYZE_UI: ${{ inputs.analyze_ui || 'false' }}
           REPO_NAME: ${{ github.repository }}
           MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
         run: |
