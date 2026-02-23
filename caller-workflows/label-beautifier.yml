@@ -14,7 +14,7 @@ on:
 
 jobs:
   beautify:
-    uses: 0GiS0/agentic-repo/.github/workflows/label-beautifier.yml@main
+    uses: __OWNER__/agentic-repo/.github/workflows/label-beautifier.yml@main
     with:
       dry_run: ${{ inputs.dry_run }}
     secrets: inherit

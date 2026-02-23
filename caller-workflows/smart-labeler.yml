@@ -8,7 +8,7 @@ on:
 
 jobs:
   label:
-    uses: 0GiS0/agentic-repo/.github/workflows/smart-labeler.yml@main
+    uses: __OWNER__/agentic-repo/.github/workflows/smart-labeler.yml@main
     with:
       item_type: ${{ github.event_name == 'issues' && 'issue' || 'pull_request' }}
       item_author: ${{ github.event.issue.user.login || github.event.pull_request.user.login }}

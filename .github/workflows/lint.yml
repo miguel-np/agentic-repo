@@ -1,0 +1,40 @@
+name: 🔍 Lint Workflows
+
+on:
+  push:
+    paths:
+      - ".github/workflows/*.yml"
+      - "caller-workflows/*.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/*.yml"
+      - "caller-workflows/*.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: 🔍 Validate YAML
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔍 Lint workflow files
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: |
+            .github/workflows/
+            caller-workflows/
+          config_data: |
+            extends: default
+            rules:
+              line-length:
+                max: 500
+              truthy:
+                check-keys: false
+              comments:
+                min-spaces-from-content: 1
+              document-start: disable

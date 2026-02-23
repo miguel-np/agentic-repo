@@ -6,7 +6,7 @@ on:
 
 jobs:
   enhance:
-    uses: 0GiS0/agentic-repo/.github/workflows/issue-quality-enhancer.yml@main
+    uses: __OWNER__/agentic-repo/.github/workflows/issue-quality-enhancer.yml@main
     with:
       issue_number: ${{ github.event.issue.number }}
       issue_title: ${{ github.event.issue.title }}

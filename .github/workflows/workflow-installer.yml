@@ -104,7 +104,8 @@ jobs:
 
             for FILE in $FILES; do
               FILENAME=$(basename "$FILE")
-              CONTENT=$(base64 < "$FILE")
+              # Replace the __OWNER__ placeholder with the actual repository owner
+              CONTENT=$(sed "s/__OWNER__/${OWNER}/g" "$FILE" | base64)
               TARGET_PATH=".github/workflows/${FILENAME}"
 
               echo "  📄 Processing: $TARGET_PATH"
@@ -114,8 +115,8 @@ jobs:
               EXISTING_SHA=$(gh api "repos/${REPO}/contents/${TARGET_PATH}?ref=${TARGET_BRANCH}" --jq '.sha' 2>/dev/null || echo "")
 
               if [ -n "$EXISTING_CONTENT" ]; then
-                # Check if it's already a caller (uses reusable workflow)
-                if echo "$EXISTING_CONTENT" | grep -q "uses: ${OWNER}/agentic-repo/"; then
+                # Check if it's already a caller (uses reusable workflow from agentic-repo)
+                if echo "$EXISTING_CONTENT" | grep -q "uses: .*/agentic-repo/"; then
                   echo "  ⏭️  Already using reusable workflow, skipping: $FILENAME"
                   ALREADY_CALLER="${ALREADY_CALLER}\n- **${FILENAME%.yml}** — already centralized ✅"
                   continue

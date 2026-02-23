@@ -39,6 +39,8 @@ jobs:
         run: |
           curl -fsSL https://gh.io/copilot-install | bash
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "--- Copilot CLI version ---"
+          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
 
       - name: 🏷️✨ Analyze and beautify labels
         env:
@@ -166,5 +168,11 @@ jobs:
           - Default GitHub labels without emojis (bug, documentation, enhancement, etc.) should be beautified
           - Preserve any custom labels that are meaningful to the project, just beautify them
           " --allow-all-tools
+          exit_code=$?
+
+          if [ $exit_code -ne 0 ]; then
+            echo "::error::Copilot CLI failed with exit code $exit_code"
+            exit $exit_code
+          fi
 
           echo "✅ Label beautification completed"

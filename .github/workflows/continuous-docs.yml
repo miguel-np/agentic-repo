@@ -1,6 +1,24 @@
 name: 📚 Continuous Documentation
 
 on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - "**/*.js"
+      - "**/*.ts"
+      - "**/*.py"
+      - "**/*.go"
+      - "**/*.java"
+      - "**/*.cs"
+      - "**/*.rb"
+      - "**/*.rs"
+      - "**/*.php"
+      - "**/*.swift"
+      - "**/*.kt"
+      - "**/*.sh"
+      - "**/*.yml"
+      - "**/*.yaml"
+      - "**/*.json"
   workflow_call:
     inputs:
       pr_number:
@@ -23,6 +41,11 @@ on:
         description: 'Head branch of the PR'
         required: true
         type: string
+      author_filter:
+        description: 'Who can trigger this workflow: owner_only, collaborators, or all'
+        required: false
+        type: string
+        default: 'owner_only'
     secrets:
       COPILOT_PAT:
         required: true
@@ -37,20 +60,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🔐 Verify author is repo owner
+      - name: 🔐 Verify author is allowed
         id: author_check
         env:
           REPO_OWNER: ${{ github.repository_owner }}
-          INPUT_AUTHOR: ${{ inputs.pr_author }}
+          REPO_FULL: ${{ github.repository }}
+          INPUT_AUTHOR: ${{ inputs.pr_author || github.event.pull_request.user.login }}
+          AUTHOR_FILTER: ${{ inputs.author_filter || 'owner_only' }}
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || github.token }}
         run: |
           allowed="false"
-          if [ "$INPUT_AUTHOR" = "$REPO_OWNER" ]; then
-            allowed="true"
-          fi
+          case "$AUTHOR_FILTER" in
+            all)
+              allowed="true"
+              ;;
+            collaborators)
+              perm=$(gh api "repos/${REPO_FULL}/collaborators/${INPUT_AUTHOR}/permission" --jq '.permission' 2>/dev/null || echo "none")
+              if [ "$perm" = "admin" ] || [ "$perm" = "write" ] || [ "$perm" = "maintain" ]; then
+                allowed="true"
+              fi
+              ;;
+            owner_only|*)
+              if [ "$INPUT_AUTHOR" = "$REPO_OWNER" ]; then
+                allowed="true"
+              fi
+              ;;
+          esac
 
           echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
           if [ "$allowed" != "true" ]; then
-            echo "Skipping: author $INPUT_AUTHOR is not repository owner $REPO_OWNER."
+            echo "Skipping: author '$INPUT_AUTHOR' not allowed under filter '$AUTHOR_FILTER'."
           fi
 
       - name: 📥 Checkout PR branch
@@ -59,13 +98,15 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.head_ref || github.event.pull_request.head.ref }}
-          token: ${{ secrets.COPILOT_PAT }}
+          token: ${{ secrets.COPILOT_PAT || github.token }}
 
       - name: 📦 Install GitHub Copilot CLI
         if: ${{ steps.author_check.outputs.allowed == 'true' }}
         run: |
           curl -fsSL https://gh.io/copilot-install | bash
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "--- Copilot CLI version ---"
+          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
 
       - name: 📚 Analyze code changes and documentation drift
         if: ${{ steps.author_check.outputs.allowed == 'true' }}
@@ -212,5 +253,11 @@ jobs:
           - If the PR already includes correct documentation updates, just confirm they look good
           - Be conservative — when in doubt, skip a marginal change rather than risk breaking good docs
           " --allow-all-tools --model claude-opus-4.6
+          exit_code=$?
+
+          if [ $exit_code -ne 0 ]; then
+            echo "::error::Copilot CLI failed with exit code $exit_code for PR #$PR_NUMBER"
+            exit $exit_code
+          fi
 
           echo "✅ Documentation analysis completed for PR #$PR_NUMBER"

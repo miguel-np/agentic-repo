@@ -22,7 +22,7 @@ on:
 
 jobs:
   docs:
-    uses: 0GiS0/agentic-repo/.github/workflows/continuous-docs.yml@main
+    uses: __OWNER__/agentic-repo/.github/workflows/continuous-docs.yml@main
     with:
       pr_number: ${{ github.event.pull_request.number }}
       pr_title: ${{ github.event.pull_request.title }}

@@ -22,6 +22,11 @@ on:
         description: 'Issue author login'
         required: true
         type: string
+      author_filter:
+        description: 'Who can trigger this workflow: owner_only, collaborators, or all'
+        required: false
+        type: string
+        default: 'owner_only'
     secrets:
       COPILOT_PAT:
         required: true
@@ -36,13 +41,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🔐 Verify author is repo owner
+      - name: 🔐 Verify author is allowed
         id: author_check
         env:
           EVENT_NAME: ${{ github.event_name }}
           REPO_OWNER: ${{ github.repository_owner }}
+          REPO_FULL: ${{ github.repository }}
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
           INPUT_AUTHOR: ${{ inputs.issue_author }}
+          AUTHOR_FILTER: ${{ inputs.author_filter || 'owner_only' }}
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || github.token }}
         run: |
           author="$ISSUE_AUTHOR"
           if [ "$EVENT_NAME" = "workflow_call" ]; then
@@ -50,13 +58,27 @@ jobs:
           fi
 
           allowed="false"
-          if [ "$author" = "$REPO_OWNER" ]; then
-            allowed="true"
-          fi
+          case "$AUTHOR_FILTER" in
+            all)
+              allowed="true"
+              ;;
+            collaborators)
+              # Check if the author has push access (collaborator) to the repo
+              perm=$(gh api "repos/${REPO_FULL}/collaborators/${author}/permission" --jq '.permission' 2>/dev/null || echo "none")
+              if [ "$perm" = "admin" ] || [ "$perm" = "write" ] || [ "$perm" = "maintain" ]; then
+                allowed="true"
+              fi
+              ;;
+            owner_only|*)
+              if [ "$author" = "$REPO_OWNER" ]; then
+                allowed="true"
+              fi
+              ;;
+          esac
 
           echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
           if [ "$allowed" != "true" ]; then
-            echo "Skipping: author $author is not repository owner $REPO_OWNER."
+            echo "Skipping: author '$author' not allowed under filter '$AUTHOR_FILTER'."
           fi
 
       - name: 📥 Checkout repository
@@ -68,6 +90,8 @@ jobs:
         run: |
           curl -fsSL https://gh.io/copilot-install | bash
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          echo "--- Copilot CLI version ---"
+          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
 
       - name: ✍️ Enhance issue title and body
         if: ${{ steps.author_check.outputs.allowed == 'true' }}
@@ -121,11 +145,11 @@ jobs:
           STEP 4 — ENHANCE THE TITLE
           ──────────────────────────────────────────────
           Create a new, improved title following these rules:
-          - Start with a relevant emoji that represents the issue type:
-            🐛 for bugs, ✨ for features/enhancements, 📝 for docs, 🎨 for design/visual,
-            🖼️ for branding, 🐍 for Python code, 📊 for slides, 🤖 for Copilot skill,
-            🎭 for agents, 🔤 for typography, 🖌️ for icons, 🗒️ for speaker notes,
-            🔧 for refactoring, 📦 for renderers, 🔒 for security, ⚡ for performance
+          - Start with a relevant emoji that represents the issue type. Common examples:
+            🐛 bug, ✨ feature/enhancement, 📝 documentation, 🎨 design/visual,
+            🔧 refactoring, 🔒 security, ⚡ performance, 🧪 testing, 🏗️ architecture,
+            ♻️ tech debt, 🚀 deployment/CI, ⬆️ dependencies
+            Choose other emojis when they better represent the project's domain.
           - Keep it concise but descriptive (5-12 words after the emoji)
           - Use imperative mood (e.g., 'Add dark mode support' not 'Adding dark mode support')
           - Do NOT include issue type prefixes like '[BUG]' or '[FEATURE]' — the emoji replaces those
@@ -242,5 +266,11 @@ jobs:
           - Be helpful, not intrusive — enhance clarity without adding fluff
           - If the issue body is empty, infer what you can from the title and code analysis, but mark inferred sections clearly
           " --allow-all-tools --model claude-opus-4.6
+          exit_code=$?
+
+          if [ $exit_code -ne 0 ]; then
+            echo "::error::Copilot CLI failed with exit code $exit_code for issue #$ISSUE_NUMBER"
+            exit $exit_code
+          fi
 
           echo "✅ Issue #$ISSUE_NUMBER enhanced successfully"

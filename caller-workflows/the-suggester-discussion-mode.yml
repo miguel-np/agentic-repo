@@ -20,12 +20,20 @@ on:
           - bugs
           - maintainability
           - ux-design
-          - favicon
           - readme
+      analyze_ui:
+        description: 'Attempt to build, run, and analyze the application UI via Playwright'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   suggest:
-    uses: 0GiS0/agentic-repo/.github/workflows/the-suggester-discussion-mode.yml@main
+    uses: __OWNER__/agentic-repo/.github/workflows/the-suggester-discussion-mode.yml@main
     with:
       suggestion_type: ${{ inputs.suggestion_type }}
+      analyze_ui: ${{ inputs.analyze_ui }}
     secrets: inherit
