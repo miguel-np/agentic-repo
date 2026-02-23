@@ -1,4 +1,4 @@
-name: 🔍 PR Code Reviewer
+name: "\uD83D\uDD0D PR Code Reviewer"
 
 on:
   pull_request:
@@ -30,6 +30,11 @@ on:
         required: false
         type: string
         default: 'owner_only'
+      model:
+        description: 'Copilot model to use'
+        required: false
+        type: string
+        default: 'claude-sonnet-4'
     secrets:
       COPILOT_PAT:
         required: true
@@ -40,86 +45,48 @@ permissions:
 
 jobs:
   review-pr:
-    name: 🔍 AI Code Review
+    name: "\uD83D\uDD0D AI Code Review"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - name: 🔐 Verify author is allowed
+      - name: "\uD83D\uDD10 Verify author is allowed"
         id: author_check
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REPO_OWNER: ${{ github.repository_owner }}
-          REPO_FULL: ${{ github.repository }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          INPUT_AUTHOR: ${{ inputs.pr_author }}
-          AUTHOR_FILTER: ${{ inputs.author_filter || 'owner_only' }}
-          GH_TOKEN: ${{ secrets.COPILOT_PAT || github.token }}
-        run: |
-          author="$PR_AUTHOR"
-          if [ "$EVENT_NAME" = "workflow_call" ]; then
-            author="$INPUT_AUTHOR"
-          fi
+        uses: ./.github/actions/check-author
+        with:
+          author: ${{ inputs.pr_author || github.event.pull_request.user.login }}
+          author_filter: ${{ inputs.author_filter || 'owner_only' }}
+          repo_owner: ${{ github.repository_owner }}
+          repo_full: ${{ github.repository }}
+          token: ${{ secrets.COPILOT_PAT || github.token }}
 
-          allowed="false"
-          case "$AUTHOR_FILTER" in
-            all)
-              allowed="true"
-              ;;
-            collaborators)
-              perm=$(gh api "repos/${REPO_FULL}/collaborators/${author}/permission" --jq '.permission' 2>/dev/null || echo "none")
-              if [ "$perm" = "admin" ] || [ "$perm" = "write" ] || [ "$perm" = "maintain" ]; then
-                allowed="true"
-              fi
-              ;;
-            owner_only|*)
-              if [ "$author" = "$REPO_OWNER" ]; then
-                allowed="true"
-              fi
-              ;;
-          esac
-
-          echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
-          if [ "$allowed" != "true" ]; then
-            echo "Skipping: author '$author' not allowed under filter '$AUTHOR_FILTER'."
-          fi
-
-      - name: 📥 Checkout repository
-        if: ${{ steps.author_check.outputs.allowed == 'true' }}
+      - name: "\uD83D\uDCE5 Checkout repository"
+        if: steps.author_check.outputs.allowed == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 📦 Install GitHub Copilot CLI
-        if: ${{ steps.author_check.outputs.allowed == 'true' }}
-        run: |
-          curl -fsSL https://gh.io/copilot-install | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "--- Copilot CLI version ---"
-          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+      - name: "\uD83D\uDCE6 Install GitHub Copilot CLI"
+        if: steps.author_check.outputs.allowed == 'true'
+        uses: ./.github/actions/install-copilot
 
-      - name: 🔍 Review PR code changes
-        if: ${{ steps.author_check.outputs.allowed == 'true' }}
+      - name: "\uD83D\uDD0D Review PR code changes"
+        if: steps.author_check.outputs.allowed == 'true'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
           PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
-          PR_TITLE: ${{ inputs.pr_title || github.event.pull_request.title }}
-          PR_AUTHOR: ${{ inputs.pr_author || github.event.pull_request.user.login }}
-          BASE_REF: ${{ inputs.base_ref || github.event.pull_request.base.ref }}
-          HEAD_REF: ${{ inputs.head_ref || github.event.pull_request.head.ref }}
+          REPO_NAME: ${{ github.repository }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
-          copilot -p "
-          You are an expert Code Reviewer for the repository '${{ github.repository }}'.
+          PROMPT=$(cat <<'PROMPT_EOF'
+          You are an expert Code Reviewer for the repository.
           Your job is to review the code changes in a pull request and provide constructive,
           actionable feedback as inline review comments and a summary review.
 
-          PULL REQUEST DETAILS:
-          - Number: #$PR_NUMBER
-          - Title: $PR_TITLE
-          - Author: @$PR_AUTHOR
-          - Base branch: $BASE_REF
-          - Head branch: $HEAD_REF
+          Use the GitHub MCP Server to read the full PR details and diff by number — do NOT rely
+          on any pre-filled title or body text. Fetch the PR fresh from the API.
 
           Follow these steps IN ORDER:
 
@@ -133,7 +100,7 @@ jobs:
           ──────────────────────────────────────────────
           STEP 2 — ANALYZE THE FULL DIFF
           ──────────────────────────────────────────────
-          - Use the GitHub MCP Server to get the complete diff of PR #$PR_NUMBER.
+          - Use the GitHub MCP Server to get the complete diff of the PR.
           - Read each changed file carefully. Understand what the change does and why.
           - If the diff is large, prioritize:
             a) New files and new public APIs
@@ -197,9 +164,9 @@ jobs:
 
           Explanation of the issue and why it matters.
 
-          \`\`\`suggestion
+          ```suggestion
           // Suggested fix (if applicable)
-          \`\`\`
+          ```
 
           Severity levels:
           - 🔴 **Critical** — Must fix before merge (security, data loss, crash)
@@ -215,7 +182,7 @@ jobs:
           ──────────────────────────────────────────────
           STEP 8 — POST REVIEW SUMMARY
           ──────────────────────────────────────────────
-          Use the GitHub MCP Server to add a comment on PR #$PR_NUMBER with an overall
+          Use the GitHub MCP Server to add a comment on the PR with an overall
           review summary:
 
           > 🔍 **Code Review Summary**
@@ -246,7 +213,11 @@ jobs:
           - If the code is clean and well-written, say so — not every PR needs criticism.
           - NEVER approve or request changes via the review API — only leave comments.
           - Focus on objective issues, not style preferences (unless they violate project conventions).
-          " --allow-all-tools --model claude-opus-4.6
+          PROMPT_EOF
+          )
+
+          copilot -p "Repository: ${REPO_NAME}. PR number: #${PR_NUMBER}. ${PROMPT}" \
+            --allow-all-tools --model "$MODEL"
           exit_code=$?
 
           if [ $exit_code -ne 0 ]; then

@@ -1,4 +1,4 @@
-name: ✍️ Issue Quality Enhancer
+name: "\u270D\uFE0F Issue Quality Enhancer"
 
 on:
   issues:
@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: 'owner_only'
+      model:
+        description: 'Copilot model to use'
+        required: false
+        type: string
+        default: 'claude-sonnet-4'
     secrets:
       COPILOT_PAT:
         required: true
@@ -37,83 +42,46 @@ permissions:
 
 jobs:
   enhance-issue:
-    name: ✍️ Enhance Issue Quality
+    name: "\u270D\uFE0F Enhance Issue Quality"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: 🔐 Verify author is allowed
+      - name: "\uD83D\uDD10 Verify author is allowed"
         id: author_check
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          REPO_OWNER: ${{ github.repository_owner }}
-          REPO_FULL: ${{ github.repository }}
-          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
-          INPUT_AUTHOR: ${{ inputs.issue_author }}
-          AUTHOR_FILTER: ${{ inputs.author_filter || 'owner_only' }}
-          GH_TOKEN: ${{ secrets.COPILOT_PAT || github.token }}
-        run: |
-          author="$ISSUE_AUTHOR"
-          if [ "$EVENT_NAME" = "workflow_call" ]; then
-            author="$INPUT_AUTHOR"
-          fi
+        uses: ./.github/actions/check-author
+        with:
+          author: ${{ inputs.issue_author || github.event.issue.user.login }}
+          author_filter: ${{ inputs.author_filter || 'owner_only' }}
+          repo_owner: ${{ github.repository_owner }}
+          repo_full: ${{ github.repository }}
+          token: ${{ secrets.COPILOT_PAT || github.token }}
 
-          allowed="false"
-          case "$AUTHOR_FILTER" in
-            all)
-              allowed="true"
-              ;;
-            collaborators)
-              # Check if the author has push access (collaborator) to the repo
-              perm=$(gh api "repos/${REPO_FULL}/collaborators/${author}/permission" --jq '.permission' 2>/dev/null || echo "none")
-              if [ "$perm" = "admin" ] || [ "$perm" = "write" ] || [ "$perm" = "maintain" ]; then
-                allowed="true"
-              fi
-              ;;
-            owner_only|*)
-              if [ "$author" = "$REPO_OWNER" ]; then
-                allowed="true"
-              fi
-              ;;
-          esac
-
-          echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
-          if [ "$allowed" != "true" ]; then
-            echo "Skipping: author '$author' not allowed under filter '$AUTHOR_FILTER'."
-          fi
-
-      - name: 📥 Checkout repository
-        if: ${{ steps.author_check.outputs.allowed == 'true' }}
+      - name: "\uD83D\uDCE5 Checkout repository"
+        if: steps.author_check.outputs.allowed == 'true'
         uses: actions/checkout@v4
 
-      - name: 📦 Install GitHub Copilot CLI
-        if: ${{ steps.author_check.outputs.allowed == 'true' }}
-        run: |
-          curl -fsSL https://gh.io/copilot-install | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "--- Copilot CLI version ---"
-          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+      - name: "\uD83D\uDCE6 Install GitHub Copilot CLI"
+        if: steps.author_check.outputs.allowed == 'true'
+        uses: ./.github/actions/install-copilot
 
-      - name: ✍️ Enhance issue title and body
-        if: ${{ steps.author_check.outputs.allowed == 'true' }}
+      - name: "\u270D\uFE0F Enhance issue title and body"
+        if: steps.author_check.outputs.allowed == 'true'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
           ISSUE_NUMBER: ${{ inputs.issue_number || github.event.issue.number }}
-          ISSUE_TITLE: ${{ inputs.issue_title || github.event.issue.title }}
-          ISSUE_BODY: ${{ inputs.issue_body || github.event.issue.body }}
-          ISSUE_AUTHOR: ${{ inputs.issue_author || github.event.issue.user.login }}
+          REPO_NAME: ${{ github.repository }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
-          copilot -p "
-          You are an expert Issue Quality Enhancer for the repository '${{ github.repository }}'.
+          PROMPT=$(cat <<'PROMPT_EOF'
+          You are an expert Issue Quality Enhancer for the repository.
           Your job is to take a newly opened issue and improve its quality so it is clear, detailed,
           well-structured, and consistent with the project standards.
 
-          ISSUE DETAILS:
-          - Number: #$ISSUE_NUMBER
-          - Author: @$ISSUE_AUTHOR
-          - Original Title: $ISSUE_TITLE
-          - Original Body: $ISSUE_BODY
+          Use the GitHub MCP Server to read the full issue details by number — do NOT rely
+          on any pre-filled title or body text. Fetch the issue fresh from the API.
 
           Follow these steps IN ORDER:
 
@@ -160,7 +128,7 @@ jobs:
           Rewrite the issue body using this structure. Adapt sections based on issue type:
 
           **For Bug Reports:**
-          \`\`\`
+          ```
           ## 🐛 Description
           Clear description of what's broken.
 
@@ -182,10 +150,10 @@ jobs:
 
           ## 📸 Screenshots / Logs (if applicable)
           Any relevant output.
-          \`\`\`
+          ```
 
           **For Feature Requests / Enhancements:**
-          \`\`\`
+          ```
           ## ✨ Description
           Clear description of the proposed feature or improvement.
 
@@ -200,7 +168,7 @@ jobs:
 
           ## 📎 Additional Context
           Links, references, or screenshots.
-          \`\`\`
+          ```
 
           **For other issue types use a sensible structure with emoji section headers.**
 
@@ -212,8 +180,8 @@ jobs:
           - If you find relevant code references, add a section at the end of the body:
 
             ## 🔍 Relevant Code References
-            - \`path/to/file.py\` — Brief description of why this file is relevant
-            - \`path/to/another.py:L42\` — Specific function or line related to this issue
+            - `path/to/file.py` — Brief description of why this file is relevant
+            - `path/to/another.py:L42` — Specific function or line related to this issue
 
           - If the issue mentions a technology or library, check if it's already used in the project
             and note the current version or usage.
@@ -228,12 +196,14 @@ jobs:
           At the very end of the body, add:
 
           ---
-          > ✍️ *This issue was automatically enhanced by Copilot CLI. Original author: @$ISSUE_AUTHOR*
+          > ✍️ *This issue was automatically enhanced by Copilot CLI. Original author: @ISSUE_AUTHOR*
+
+          (Replace ISSUE_AUTHOR with the actual author login fetched from the API.)
 
           ──────────────────────────────────────────────
           STEP 8 — UPDATE THE ISSUE
           ──────────────────────────────────────────────
-          Use the GitHub MCP Server to UPDATE issue #$ISSUE_NUMBER with:
+          Use the GitHub MCP Server to UPDATE the issue with:
           - The new enhanced title
           - The new enhanced body
           DO NOT create a new issue. UPDATE the existing one.
@@ -242,13 +212,13 @@ jobs:
           STEP 9 — ASSIGN LABELS
           ──────────────────────────────────────────────
           - From the label list you fetched in Step 2, pick 1-3 labels that best match this issue.
-          - Use the GitHub MCP Server to assign those labels to issue #$ISSUE_NUMBER.
+          - Use the GitHub MCP Server to assign those labels to the issue.
           - Every issue MUST have at least one label.
 
           ──────────────────────────────────────────────
           STEP 10 — ADD A FRIENDLY COMMENT
           ──────────────────────────────────────────────
-          Use the GitHub MCP Server to add a comment on issue #$ISSUE_NUMBER with a brief,
+          Use the GitHub MCP Server to add a comment on the issue with a brief,
           friendly summary of what was improved. Example:
 
           > 🤖 **Issue enhanced!** I've improved this issue by:
@@ -265,7 +235,11 @@ jobs:
           - If the original issue is already well-written in English with good structure, make only minimal improvements
           - Be helpful, not intrusive — enhance clarity without adding fluff
           - If the issue body is empty, infer what you can from the title and code analysis, but mark inferred sections clearly
-          " --allow-all-tools --model claude-opus-4.6
+          PROMPT_EOF
+          )
+
+          copilot -p "Repository: ${REPO_NAME}. Issue number: #${ISSUE_NUMBER}. ${PROMPT}" \
+            --allow-all-tools --model "$MODEL"
           exit_code=$?
 
           if [ $exit_code -ne 0 ]; then

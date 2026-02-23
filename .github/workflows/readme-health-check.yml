@@ -20,6 +20,11 @@ on:
         required: false
         type: string
         default: 'report-only'
+      model:
+        description: 'Copilot model to use'
+        required: false
+        type: string
+        default: 'claude-sonnet-4'
     secrets:
       COPILOT_PAT:
         required: true
@@ -33,6 +38,7 @@ jobs:
   health-check:
     name: 🏥 README Health Check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: 📥 Checkout repository
@@ -41,151 +47,78 @@ jobs:
           fetch-depth: 0
 
       - name: 📦 Install GitHub Copilot CLI
-        run: |
-          curl -fsSL https://gh.io/copilot-install | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "--- Copilot CLI version ---"
-          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+        uses: ./.github/actions/install-copilot
 
       - name: 🏥 Analyze README health
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
           FIX_MODE: ${{ inputs.fix_mode || 'report-only' }}
+          REPO_NAME: ${{ github.repository }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
-          copilot -p "
-          You are a README Health Checker for the repository '${{ github.repository }}'.
-          Your job is to analyze all README files in the repository, check their accuracy
-          and completeness, and either report issues or fix them.
-
-          CONFIGURATION:
-          - Fix mode: $FIX_MODE
-            - 'report-only': create an issue with findings
-            - 'auto-fix': create a PR with fixes
+          PROMPT=$(cat <<'PROMPT_EOF'
+          You are a README Health Checker for the repository.
+          Your job is to analyze all README files, check their accuracy and completeness,
+          and either report issues or fix them.
 
           Follow these steps IN ORDER:
 
           ──────────────────────────────────────────────
           STEP 1 — FIND ALL README FILES
           ──────────────────────────────────────────────
-          - Scan the repository for all README files: README.md, README.es.md,
-            docs/README.md, etc.
-          - Note the language of each README (English, Spanish, etc.).
+          Scan for all README files (README.md, README.es.md, docs/README.md, etc.).
 
           ──────────────────────────────────────────────
           STEP 2 — ANALYZE PROJECT STATE
           ──────────────────────────────────────────────
-          - Scan the actual project structure (directories, key files, technologies).
-          - List all workflows in .github/workflows/.
-          - List all dependencies from package.json, composer.json, etc.
-          - Note the actual features and configuration options.
+          Scan actual project structure, workflows, dependencies, features, and config options.
 
           ──────────────────────────────────────────────
           STEP 3 — CHECK STRUCTURAL COMPLETENESS
           ──────────────────────────────────────────────
-          For each README, verify it includes:
-          - [ ] Project title and description
-          - [ ] Badges (if applicable — build status, coverage, version)
-          - [ ] Prerequisites / requirements
-          - [ ] Installation instructions
-          - [ ] Usage / quick start guide
-          - [ ] Configuration options documented
-          - [ ] Project structure (if >10 files)
-          - [ ] Contributing guidelines (or link to CONTRIBUTING.md)
-          - [ ] License information
-          - [ ] Link to other language versions
+          For each README, verify: title, description, prerequisites, installation, usage,
+          configuration, project structure, contributing, license, and language links.
 
           ──────────────────────────────────────────────
           STEP 4 — CHECK ACCURACY
           ──────────────────────────────────────────────
-          Compare the README content against the actual project:
-
-          a) **Project structure**: Does the tree/list match the actual directory layout?
-             Check for missing directories, renamed files, or deleted items.
-
-          b) **Features list**: Does it mention all workflows/features that actually exist?
-             Are there features listed that have been removed?
-
-          c) **Installation instructions**: Are the commands correct and up to date?
-             Would they work if someone followed them right now?
-
-          d) **Configuration**: Are all environment variables, secrets, and options documented?
-             Do the documented defaults match the actual defaults?
-
-          e) **Technology list**: Does it match the actual dependencies and tools used?
+          Compare README content against actual project: project structure, features list,
+          installation instructions, configuration docs, technology list.
 
           ──────────────────────────────────────────────
           STEP 5 — CHECK LINKS AND BADGES
           ──────────────────────────────────────────────
-          - Extract all URLs from the README files.
-          - For each URL, determine if it is likely still valid:
-            - GitHub links: check if the referenced repo, file, or path exists
-            - Documentation links: verify the domain is still active
-            - Badge URLs: check if they follow current badge service formats
-          - Flag any links that appear broken or outdated.
+          Extract all URLs and verify they are likely still valid.
 
           ──────────────────────────────────────────────
           STEP 6 — CHECK MULTILINGUAL CONSISTENCY
           ──────────────────────────────────────────────
-          If multiple README versions exist (e.g., README.md and README.es.md):
-          - Compare their section structure — they should have the same sections.
-          - Check that feature lists, project structure, and configuration tables match.
-          - Flag any section present in one but missing in the other.
-          - Flag any content that is outdated in one language vs the other.
+          Compare section structure, feature lists, and content between language versions.
 
           ──────────────────────────────────────────────
           STEP 7 — GENERATE HEALTH REPORT
           ──────────────────────────────────────────────
-          Create a health report with a score:
-
-          ## 🏥 README Health Report
-
-          **Overall Score: X/100**
-
-          | Category | Score | Issues |
-          |----------|-------|--------|
-          | Completeness | X/25 | ... |
-          | Accuracy | X/25 | ... |
-          | Links & Badges | X/25 | ... |
-          | Multilingual Sync | X/25 | ... |
-
-          ### 🔴 Critical Issues
-          (Issues that would confuse or mislead users)
-
-          ### 🟡 Important Issues
-          (Missing sections or outdated information)
-
-          ### 🟢 Minor Issues
-          (Nice-to-have improvements)
+          Create a scored report (X/100) with categories: Completeness, Accuracy,
+          Links & Badges, Multilingual Sync. List critical, important, and minor issues.
 
           ──────────────────────────────────────────────
           STEP 8 — APPLY FIXES OR CREATE REPORT
           ──────────────────────────────────────────────
-
-          **If FIX_MODE is 'report-only':**
-          - Use the GitHub MCP Server to create an issue with the health report.
-          - Title: '🏥 README Health Check — [MONTH YEAR]'
-          - Assign the label '📖 documentation' if it exists.
-
-          **If FIX_MODE is 'auto-fix':**
-          - Create a new branch: 'readme-health-fix/YYYYMMDD'
-          - Edit each README file to fix all 🔴 and 🟡 issues.
-          - Update the project structure section to match reality.
-          - Fix broken links where possible.
-          - Sync multilingual versions.
-          - Push the changes and create a PR:
-            - Title: '🏥 Fix README health issues'
-            - Body: include the full health report and a list of changes made
-          - Do NOT fix 🟢 issues in auto-fix mode to keep the PR focused.
+          - report-only: create an issue with the health report
+          - auto-fix: create a branch, fix critical/important issues, create a PR
+          If score >90, report positively and skip creating an issue.
 
           IMPORTANT GUIDELINES:
           - Be thorough but practical — focus on issues that affect users
           - Don't rewrite well-written sections — only fix what's wrong
-          - Respect the existing writing style and tone
-          - If the README is healthy (score >90), report it positively and skip creating an issue
-          - Always preserve the README's original structure and formatting choices
-          " --allow-all-tools --model claude-opus-4.6
+          - Respect existing writing style and formatting
+          PROMPT_EOF
+          )
+
+          copilot -p "Repository: ${REPO_NAME}. Fix mode: ${FIX_MODE}. ${PROMPT}" \
+            --allow-all-tools --model "$MODEL"
           exit_code=$?
 
           if [ $exit_code -ne 0 ]; then

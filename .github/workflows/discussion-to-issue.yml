@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: '✅ accepted'
+      model:
+        description: 'Copilot model to use'
+        required: false
+        type: string
+        default: 'claude-sonnet-4'
     secrets:
       COPILOT_PAT:
         required: true
@@ -38,6 +43,7 @@ jobs:
   convert-discussion:
     name: 💬 Convert Discussion to Issue
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: 🔐 Check trigger label
@@ -50,7 +56,6 @@ jobs:
           INPUT_DISCUSSION: ${{ inputs.discussion_number }}
         run: |
           if [ "$EVENT_NAME" = "discussion" ]; then
-            # Only proceed if the label that was added matches the trigger label
             if [ "$LABEL_NAME" = "$LABEL_TRIGGER" ]; then
               echo "proceed=true" >> "$GITHUB_OUTPUT"
               echo "discussion_number=$DISCUSSION_NUMBER" >> "$GITHUB_OUTPUT"
@@ -59,122 +64,82 @@ jobs:
               echo "proceed=false" >> "$GITHUB_OUTPUT"
             fi
           else
-            # workflow_dispatch or workflow_call: always proceed
             echo "proceed=true" >> "$GITHUB_OUTPUT"
             echo "discussion_number=$INPUT_DISCUSSION" >> "$GITHUB_OUTPUT"
           fi
 
       - name: 📥 Checkout repository
-        if: ${{ steps.label_check.outputs.proceed == 'true' }}
+        if: steps.label_check.outputs.proceed == 'true'
         uses: actions/checkout@v4
 
       - name: 📦 Install GitHub Copilot CLI
-        if: ${{ steps.label_check.outputs.proceed == 'true' }}
-        run: |
-          curl -fsSL https://gh.io/copilot-install | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "--- Copilot CLI version ---"
-          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+        if: steps.label_check.outputs.proceed == 'true'
+        uses: ./.github/actions/install-copilot
 
       - name: 💬 Convert discussion to issue
-        if: ${{ steps.label_check.outputs.proceed == 'true' }}
+        if: steps.label_check.outputs.proceed == 'true'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
           DISCUSSION_NUMBER: ${{ steps.label_check.outputs.discussion_number }}
+          REPO_NAME: ${{ github.repository }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
-          copilot -p "
-          You are a Discussion-to-Issue Converter for the repository '${{ github.repository }}'.
+          PROMPT=$(cat <<'PROMPT_EOF'
+          You are a Discussion-to-Issue Converter for the repository.
           Your job is to take a GitHub Discussion that has been accepted and create a
           well-structured issue from it, preserving all context and maintaining bidirectional links.
 
-          DISCUSSION NUMBER: #$DISCUSSION_NUMBER
+          Use the GitHub MCP Server to read the discussion details by number.
 
           Follow these steps IN ORDER:
 
           ──────────────────────────────────────────────
           STEP 1 — READ THE DISCUSSION
           ──────────────────────────────────────────────
-          - Use the GitHub MCP Server to get the full details of discussion #$DISCUSSION_NUMBER.
-          - Read the title, body, author, labels, and all comments/replies.
-          - Note the discussion category and any consensus reached in the comments.
+          - Get the full details: title, body, author, labels, and all comments/replies.
+          - Note the category and any consensus reached in the comments.
 
           ──────────────────────────────────────────────
           STEP 2 — CHECK FOR EXISTING ISSUE
           ──────────────────────────────────────────────
-          - Use the GitHub MCP Server to search for existing issues that reference
-            this discussion (search for 'discussion #$DISCUSSION_NUMBER' or the discussion title).
-          - If an issue already exists that was created from this discussion, STOP and post
-            a comment on the discussion: 'An issue already exists: #ISSUE_NUMBER'.
-          - Only proceed if no duplicate issue is found.
+          - Search for existing issues that reference this discussion.
+          - If a duplicate issue exists, STOP and comment on the discussion.
 
           ──────────────────────────────────────────────
           STEP 3 — UNDERSTAND THE LABELS
           ──────────────────────────────────────────────
-          - Use the GitHub MCP Server to list ALL available labels in this repository.
-          - Note the labels on the discussion — these will be transferred to the issue.
+          - List ALL available labels in the repository.
 
           ──────────────────────────────────────────────
           STEP 4 — CREATE THE ISSUE
           ──────────────────────────────────────────────
-          Create a new issue with:
-
-          **Title:**
-          - Use the discussion title as a base
-          - Start with a relevant emoji if the discussion title doesn't have one
-          - Use imperative mood if needed ('Add X' not 'Adding X')
-
-          **Body:**
-          ## 📋 Description
-          Synthesize the discussion into a clear, actionable description.
-          Include the key points from the discussion body and important comments.
-
-          ## 🎯 Motivation
-          Why is this needed? Extract the reasoning from the discussion.
-
-          ## 📐 Proposed Solution
-          If the discussion reached consensus on an approach, describe it.
-          If multiple approaches were discussed, list them with pros/cons.
-
-          ## 📎 Context
-          - Created from Discussion #$DISCUSSION_NUMBER
-          - Original author: @DISCUSSION_AUTHOR
-          - Discussion participants: @user1, @user2 (list active commenters)
-
-          ---
-          > 💬 *This issue was automatically created from [Discussion #$DISCUSSION_NUMBER](link).
-          > Original author: @DISCUSSION_AUTHOR*
+          Create an issue with:
+          - Title based on the discussion title (add emoji, use imperative mood)
+          - Body with: Description, Motivation, Proposed Solution, Context (linking back to discussion)
+          - Credit footer linking to the original discussion and author
 
           ──────────────────────────────────────────────
           STEP 5 — ASSIGN LABELS
           ──────────────────────────────────────────────
-          - Transfer all labels from the discussion to the new issue.
-          - Remove the '🤖 copilot-suggestion' label if present (it applies to discussions, not issues).
-          - Add any additional labels that make sense based on the issue content.
-          - Ensure 1-3 labels are assigned.
+          Transfer relevant labels from the discussion. Ensure 1-3 labels are assigned.
 
           ──────────────────────────────────────────────
           STEP 6 — LINK BACK TO THE DISCUSSION
           ──────────────────────────────────────────────
-          Use the GitHub MCP Server to add a comment on the original discussion #$DISCUSSION_NUMBER:
-
-          > ✅ **Issue created!**
-          >
-          > This discussion has been converted to an actionable issue: #ISSUE_NUMBER
-          >
-          > The issue preserves the context from this discussion and is ready for implementation.
-          >
-          > ---
-          > 🤖 *Automatically converted by Copilot CLI*
+          Add a comment on the original discussion confirming the issue was created.
 
           IMPORTANT GUIDELINES:
-          - NEVER lose information from the discussion — synthesize, don't truncate
-          - Preserve attribution — credit the original author and active participants
-          - The issue should be ACTIONABLE — not just a copy of the discussion
+          - NEVER lose information — synthesize, don't truncate
+          - Preserve attribution — credit the original author and participants
+          - The issue should be ACTIONABLE — not just a copy
           - If the discussion is vague, structure it into clear requirements
-          - If the discussion has no clear consensus, note the open questions in the issue
-          " --allow-all-tools --model claude-opus-4.6
+          PROMPT_EOF
+          )
+
+          copilot -p "Repository: ${REPO_NAME}. Discussion number: #${DISCUSSION_NUMBER}. ${PROMPT}" \
+            --allow-all-tools --model "$MODEL"
           exit_code=$?
 
           if [ $exit_code -ne 0 ]; then

@@ -1,0 +1,13 @@
+name: Install GitHub Copilot CLI
+description: Installs the GitHub Copilot CLI and adds it to PATH with version logging
+
+runs:
+  using: composite
+  steps:
+    - name: Install GitHub Copilot CLI
+      shell: bash
+      run: |
+        curl -fsSL https://gh.io/copilot-install | bash
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        echo "--- Copilot CLI version ---"
+        "$HOME/.local/bin/copilot" --version 2>/dev/null || echo "(version flag not supported)"

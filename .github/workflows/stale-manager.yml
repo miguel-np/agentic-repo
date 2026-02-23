@@ -40,6 +40,11 @@ on:
         required: false
         type: string
         default: 'true'
+      model:
+        description: 'Copilot model to use'
+        required: false
+        type: string
+        default: 'claude-sonnet-4'
     secrets:
       COPILOT_PAT:
         required: true
@@ -53,17 +58,14 @@ jobs:
   manage-stale:
     name: 🧹 Manage Stale Items
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
       - name: 📦 Install GitHub Copilot CLI
-        run: |
-          curl -fsSL https://gh.io/copilot-install | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "--- Copilot CLI version ---"
-          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+        uses: ./.github/actions/install-copilot
 
       - name: 🧹 Analyze and manage stale items
         env:
@@ -71,130 +73,69 @@ jobs:
           STALE_DAYS: ${{ inputs.stale_days || '30' }}
           CLOSE_DAYS: ${{ inputs.close_days || '14' }}
           DRY_RUN: ${{ inputs.dry_run || 'true' }}
+          REPO_NAME: ${{ github.repository }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
-          copilot -p "
-          You are a Stale Issue & PR Manager for the repository '${{ github.repository }}'.
+          PROMPT=$(cat <<'PROMPT_EOF'
+          You are a Stale Issue & PR Manager for the repository.
           Your job is to identify issues and PRs that have been inactive for too long,
           warn their authors, and close truly abandoned items.
-
-          CONFIGURATION:
-          - Stale threshold: $STALE_DAYS days of inactivity
-          - Close threshold: $CLOSE_DAYS days after stale warning with no response
-          - DRY RUN MODE: $DRY_RUN
 
           Follow these steps IN ORDER:
 
           ──────────────────────────────────────────────
           STEP 1 — ENSURE THE STALE LABEL EXISTS
           ──────────────────────────────────────────────
-          - Use the GitHub MCP Server to list all labels in this repository.
-          - If a label named '🧹 stale' does NOT exist, create it with:
-            - Name: '🧹 stale'
-            - Color: '795548'
-            - Description: 'Issue or PR with no recent activity'
-          - If DRY RUN MODE is 'true', skip the creation but note it would be created.
+          - List all labels. If '🧹 stale' does NOT exist, create it
+            (color: '795548', description: 'Issue or PR with no recent activity').
+          - If DRY RUN MODE is enabled, skip the creation but note it would be created.
 
           ──────────────────────────────────────────────
           STEP 2 — FIND STALE ISSUES
           ──────────────────────────────────────────────
-          - Use the GitHub MCP Server to list all OPEN issues in this repository.
-          - For each issue, check the last activity date (last comment or last update).
-          - An issue is considered STALE if:
-            a) It has had no comments or updates for at least $STALE_DAYS days
-            b) It does NOT have a label indicating active work (e.g., 'in-progress', 'wip', 'blocked')
-            c) It is NOT pinned
-          - Separate stale issues into two groups:
-            a) NEWLY STALE: inactive for $STALE_DAYS+ days but NOT yet labeled '🧹 stale'
-            b) READY TO CLOSE: already labeled '🧹 stale' AND inactive for $CLOSE_DAYS+ more days since the stale warning
+          - List all OPEN issues. For each, check the last activity date.
+          - An issue is STALE if: inactive for the configured days, NOT labeled 'in-progress'/'wip'/'blocked', NOT pinned.
+          - Separate into: NEWLY STALE (needs warning) and READY TO CLOSE (warning expired).
 
           ──────────────────────────────────────────────
           STEP 3 — FIND STALE PULL REQUESTS
           ──────────────────────────────────────────────
-          - Use the GitHub MCP Server to list all OPEN pull requests in this repository.
-          - Apply the same logic as Step 2 for PRs.
-          - Additionally, skip PRs that have pending review requests (they may be waiting on reviewers).
-          - A PR is considered stale if no commits, comments, or reviews in $STALE_DAYS days.
+          - Apply the same logic for PRs. Also skip PRs with pending review requests.
 
           ──────────────────────────────────────────────
           STEP 4 — GENERATE THE ACTION PLAN
           ──────────────────────────────────────────────
-          Display a summary table:
-
-          ### Newly Stale (will receive warning)
-          | Type | # | Title | Last Activity | Days Inactive |
-          |------|---|-------|---------------|---------------|
-          ...
-
-          ### Ready to Close (warning expired with no response)
-          | Type | # | Title | Stale Warning Date | Days Since Warning |
-          |------|---|-------|--------------------|--------------------|
-          ...
-
-          ### Excluded (active, in-progress, or pinned)
-          | Type | # | Title | Reason Excluded |
-          |------|---|-------|-----------------|
-          ...
-
-          If DRY RUN MODE is 'true': STOP HERE. Do not modify any issues or PRs.
+          Display summary tables for: newly stale, ready to close, and excluded items.
+          If DRY RUN MODE is enabled: STOP HERE.
 
           ──────────────────────────────────────────────
           STEP 5 — WARN NEWLY STALE ITEMS
           ──────────────────────────────────────────────
-          Only if DRY RUN MODE is 'false':
-
-          For each NEWLY STALE item:
-          1. Add the '🧹 stale' label
-          2. Post a comment:
-
-          > 👋 Hey @AUTHOR — this ITEM_TYPE has been inactive for DAYS days.
-          >
-          > Is this still relevant? Please respond with an update or we'll close it
-          > automatically in $CLOSE_DAYS days to keep the backlog clean.
-          >
-          > - Comment to keep it open
-          > - Close it yourself if it's no longer needed
-          >
-          > ---
-          > 🤖 *Automated stale check by Copilot CLI*
+          Only if DRY RUN is disabled: add the '🧹 stale' label and post a friendly warning comment.
 
           ──────────────────────────────────────────────
           STEP 6 — CLOSE EXPIRED STALE ITEMS
           ──────────────────────────────────────────────
-          Only if DRY RUN MODE is 'false':
-
-          For each READY TO CLOSE item:
-          1. Post a closing comment:
-
-          > 🔒 Closing this ITEM_TYPE due to inactivity. It was marked as stale DAYS
-          > days ago with no further response.
-          >
-          > If this is still relevant, feel free to reopen it with an update.
-          >
-          > ---
-          > 🤖 *Automatically closed by Copilot CLI*
-
-          2. Close the issue or PR.
+          Only if DRY RUN is disabled: post a closing comment and close the item.
 
           ──────────────────────────────────────────────
           STEP 7 — POST SUMMARY
           ──────────────────────────────────────────────
-          Print a final summary:
-          - Total open issues/PRs checked
-          - Items warned as stale
-          - Items closed
-          - Items excluded
-          - Items already stale (still waiting)
+          Print final summary: total checked, warned, closed, excluded, still waiting.
 
           IMPORTANT GUIDELINES:
-          - NEVER close items with recent activity — double-check the dates
-          - NEVER close items labeled as 'in-progress', 'wip', 'blocked', or 'pinned'
-          - NEVER close items with active discussions (recent comments from multiple users)
+          - NEVER close items with recent activity — double-check dates
+          - NEVER close items labeled 'in-progress', 'wip', 'blocked', or 'pinned'
+          - NEVER close items with active discussions
           - Be friendly and respectful in all comments
-          - The goal is to keep the backlog clean, NOT to be aggressive about closing things
           - When in doubt, warn but don't close
-          " --allow-all-tools --model claude-opus-4.6
+          PROMPT_EOF
+          )
+
+          copilot -p "Repository: ${REPO_NAME}. Stale threshold: ${STALE_DAYS} days. Close threshold: ${CLOSE_DAYS} days after warning. DRY RUN: ${DRY_RUN}. ${PROMPT}" \
+            --allow-all-tools --model "$MODEL"
           exit_code=$?
 
           if [ $exit_code -ne 0 ]; then

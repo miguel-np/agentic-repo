@@ -1,4 +1,4 @@
-name: 💡 Copilot Suggester (Discussion Mode)
+name: "\uD83D\uDCA1 Copilot Suggester (Discussion Mode)"
 
 on:
   # schedule:
@@ -43,6 +43,11 @@ on:
         required: false
         type: string
         default: 'true'
+      model:
+        description: 'Copilot model to use'
+        required: false
+        type: string
+        default: 'claude-sonnet-4'
     secrets:
       COPILOT_PAT:
         required: true
@@ -53,22 +58,19 @@ permissions:
 
 jobs:
   review:
-    name: 🔍 Analyze & Create Discussion Ideas
+    name: "\uD83D\uDD0D Analyze & Create Discussion Ideas"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - name: 📥 Checkout repository
+      - name: "\uD83D\uDCE5 Checkout repository"
         uses: actions/checkout@v4
 
-      - name: 📦 Install GitHub Copilot CLI
-        run: |
-          curl -fsSL https://gh.io/copilot-install | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "--- Copilot CLI version ---"
-          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+      - name: "\uD83D\uDCE6 Install GitHub Copilot CLI"
+        uses: ./.github/actions/install-copilot
 
-      - name: 🔧 Configure Playwright MCP Server
-        if: ${{ inputs.analyze_ui != 'false' }}
+      - name: "\uD83D\uDD27 Configure Playwright MCP Server"
+        if: inputs.analyze_ui != 'false'
         run: |
           mkdir -p ~/.copilot
           cat > ~/.copilot/mcp-config.json << 'EOF'
@@ -76,18 +78,20 @@ jobs:
             "servers": {
               "playwright": {
                 "command": "npx",
-                "args": ["@playwright/mcp@latest"]
+                "args": ["@playwright/mcp@0.0.29"]
               }
             }
           }
           EOF
           echo "✅ Playwright MCP Server configured"
 
-      - name: 🤖 Analyze code and create discussions with Copilot CLI
+      - name: "\uD83E\uDD16 Analyze code and create discussions with Copilot CLI"
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
           SUGGESTION_TYPE: ${{ inputs.suggestion_type || 'all' }}
           ANALYZE_UI: ${{ inputs.analyze_ui || 'true' }}
+          REPO_NAME: ${{ github.repository }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
@@ -100,37 +104,13 @@ jobs:
 
           # Build UI analysis block only when enabled
           if [ "$ANALYZE_UI" = "true" ]; then
-            UI_BLOCK="
-          3. THIRD — BUILD, RUN & ANALYZE THE APPLICATION UI:
-             a) Detect the project type by inspecting config files (package.json, pom.xml,
-                build.gradle, Cargo.toml, go.mod, requirements.txt, Gemfile, *.csproj, etc.).
-             b) Install dependencies using the appropriate package manager
-                (npm install, pip install -r requirements.txt, mvn install, dotnet restore, etc.).
-             c) Build the project if a build step exists (npm run build, mvn package, dotnet build, etc.).
-             d) Start a local dev/preview server using the project's own scripts (npm start,
-                npm run serve, python manage.py runserver, etc.) or fall back to a generic static
-                server (npx serve dist/ -l 4200) if no dev server is available.
-                If you cannot determine how to serve the project, skip the UI analysis and note it.
-             e) Use the Playwright MCP Server to navigate to the running application.
-             f) Explore the application: visit the main page, navigate through menus and links,
-                interact with forms or buttons, and take screenshots of each distinct view.
-             g) Analyze the screenshots for:
-                - Overall visual design quality (colors, spacing, typography, modern look)
-                - Usability issues (button sizes, contrast, responsive design)
-                - Missing UI elements (loading states, error states, empty states)
-                - Accessibility concerns (color contrast, focus indicators)
-                - Suggestions for improving the Look & Feel
-             h) Check if the application has a custom favicon:
-                - Look for favicon files in common locations (src/, public/, static/, wwwroot/, etc.)
-                - Check the main HTML file for favicon link tags
-                - If no custom favicon exists or it uses a framework default, suggest creating one"
+            UI_INSTRUCTION="ALSO perform UI analysis: detect project type, install deps, build, start a local server, use the Playwright MCP Server to navigate the app, take screenshots, and analyze visual design quality, usability, accessibility, and favicon. Include UX findings in your suggestions."
           else
-            UI_BLOCK="
-          3. THIRD: UI analysis was disabled for this run. Skip any browser-based analysis."
+            UI_INSTRUCTION="UI analysis was disabled for this run. Skip any browser-based analysis."
           fi
 
-          copilot -p "
-          You are analyzing the repository '${{ github.repository }}' to find improvement suggestions.
+          PROMPT=$(cat <<'PROMPT_EOF'
+          You are analyzing the repository to find improvement suggestions.
           Follow these steps:
 
           1. FIRST: Use the GitHub MCP Server to list ALL available discussion categories in this repository.
@@ -140,9 +120,8 @@ jobs:
           2. SECOND: Use the GitHub MCP Server to review the last 5 discussions in this repository to understand:
              - The title structure (emojis, prefixes, etc.)
              - The body structure (sections, formatting)
-          $UI_BLOCK
 
-          4. FOURTH: Analyze the README.md file:
+          3. THIRD: Analyze the README.md file:
              - Check if it has a proper project description
              - Check if it includes screenshots of the application
              - Check if it has installation instructions
@@ -150,16 +129,16 @@ jobs:
              - Check if it has contribution guidelines
              - Suggest improvements including adding screenshots or better documentation
 
-          5. FIFTH: Analyze all the code in this repository looking for improvements in: $CATEGORIES
+          4. FOURTH: Analyze all the code in this repository looking for improvements in the requested categories.
 
-          6. SIXTH: Before creating any discussion, use the GitHub MCP Server to search for existing
+          5. FIFTH: Before creating any discussion, use the GitHub MCP Server to search for existing
              ISSUES AND DISCUSSIONS in this repository that might be related to each suggestion.
              - Search using relevant keywords from your suggestion
              - Check both open AND closed issues
              - If an issue or discussion already exists that covers the same topic, DO NOT create a duplicate
              - Only proceed if NO related item exists
 
-          7. SEVENTH: For each important suggestion that has NO related existing issue or discussion,
+          6. SIXTH: For each important suggestion that has NO related existing issue or discussion,
              create a DISCUSSION in this repository.
              CRITICAL REQUIREMENTS for each discussion:
              - Category: Use the 'Ideas' category (or equivalent found in step 1)
@@ -172,7 +151,7 @@ jobs:
              - For README suggestions, include recommendations for adding screenshots and better documentation
              - Footer: Include 'This discussion was automatically generated by Copilot CLI'
 
-             ⚠️ LABELS ARE MANDATORY ⚠️
+             LABELS ARE MANDATORY:
              After creating each discussion, you MUST add labels to it using the GitHub MCP Server.
              - First, list available labels in the repository
              - If the label '🤖 copilot-suggestion' does NOT exist yet, CREATE it first
@@ -181,7 +160,7 @@ jobs:
              - Add additional labels based on the suggestion type
                (e.g., 'enhancement', 'security', 'performance', 'documentation', 'design', etc.)
 
-          ⚠️ QUALITY OVER QUANTITY ⚠️
+          QUALITY OVER QUANTITY:
           - Only create discussions for suggestions that provide REAL VALUE to the project
           - Do NOT create discussions just to create something — if the codebase is already in
             good shape, it is OK to create zero discussions
@@ -196,7 +175,11 @@ jobs:
           with everything.
           REMEMBER: Skip any suggestion that already has a related issue or discussion!
           CRITICAL: After creating each discussion, you MUST add labels to it.
-          " --allow-all-tools
+          PROMPT_EOF
+          )
+
+          copilot -p "Repository: ${REPO_NAME}. Categories to analyze: ${CATEGORIES}. ${UI_INSTRUCTION} ${PROMPT}" \
+            --allow-all-tools --model "$MODEL"
           exit_code=$?
 
           if [ $exit_code -ne 0 ]; then

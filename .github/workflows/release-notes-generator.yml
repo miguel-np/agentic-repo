@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: ''
+      model:
+        description: 'Copilot model to use'
+        required: false
+        type: string
+        default: 'claude-sonnet-4'
     secrets:
       COPILOT_PAT:
         required: true
@@ -36,6 +41,7 @@ jobs:
   generate-notes:
     name: 📋 Generate Release Notes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: 📥 Checkout repository
@@ -44,124 +50,69 @@ jobs:
           fetch-depth: 0
 
       - name: 📦 Install GitHub Copilot CLI
-        run: |
-          curl -fsSL https://gh.io/copilot-install | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "--- Copilot CLI version ---"
-          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+        uses: ./.github/actions/install-copilot
 
       - name: 📋 Generate and update release notes
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
           TAG_NAME: ${{ inputs.tag_name || github.event.release.tag_name }}
           PREVIOUS_TAG: ${{ inputs.previous_tag || '' }}
+          REPO_NAME: ${{ github.repository }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
-          copilot -p "
-          You are a Release Notes Generator for the repository '${{ github.repository }}'.
+          PROMPT=$(cat <<'PROMPT_EOF'
+          You are a Release Notes Generator for the repository.
           Your job is to analyze all changes since the previous release and generate
           comprehensive, well-structured release notes.
-
-          RELEASE DETAILS:
-          - Tag: $TAG_NAME
-          - Previous tag (if provided): $PREVIOUS_TAG
 
           Follow these steps IN ORDER:
 
           ──────────────────────────────────────────────
           STEP 1 — DETERMINE THE COMPARISON RANGE
           ──────────────────────────────────────────────
-          - If a previous tag was provided ('$PREVIOUS_TAG'), use it as the comparison base.
-          - If not, use the GitHub MCP Server to list all releases in this repository.
-          - Find the release immediately before '$TAG_NAME' and use its tag as the base.
-          - If there is no previous release, use the first commit of the repository.
-          - Save the comparison range: PREVIOUS_TAG..TAG_NAME
+          - If a previous tag was provided, use it as the comparison base.
+          - Otherwise, list all releases and find the one immediately before the current tag.
+          - If no previous release exists, use the first commit.
 
           ──────────────────────────────────────────────
           STEP 2 — GATHER ALL CHANGES
           ──────────────────────────────────────────────
-          - Use the GitHub MCP Server to list all commits between the two tags.
-          - Use the GitHub MCP Server to list all PRs merged between the two tags.
-          - For each PR, read its title, description, labels, and linked issues.
+          - List all commits between the two tags.
+          - List all PRs merged between the two tags.
           - List all contributors who authored commits in this range.
 
           ──────────────────────────────────────────────
           STEP 3 — CATEGORIZE CHANGES
           ──────────────────────────────────────────────
-          Classify each change into one of these categories based on PR labels,
-          commit messages, and PR descriptions:
-
-          - 💥 **Breaking Changes** — changes that break backward compatibility
-          - ✨ **New Features** — new functionality added
-          - 🐛 **Bug Fixes** — bugs that were fixed
-          - ⚡ **Performance** — performance improvements
-          - 🔒 **Security** — security fixes or improvements
-          - 📝 **Documentation** — documentation updates
-          - ♻️ **Refactoring** — code improvements without behavior changes
-          - 🧪 **Testing** — new or improved tests
-          - 🏗️ **Infrastructure** — CI/CD, build, or tooling changes
-          - ⬆️ **Dependencies** — dependency updates
+          Classify each change into:
+          - 💥 Breaking Changes, ✨ New Features, 🐛 Bug Fixes, ⚡ Performance,
+            🔒 Security, 📝 Documentation, ♻️ Refactoring, 🧪 Testing,
+            🏗️ Infrastructure, ⬆️ Dependencies
 
           ──────────────────────────────────────────────
           STEP 4 — WRITE THE RELEASE NOTES
           ──────────────────────────────────────────────
-          Generate release notes in this format:
-
-          # Release $TAG_NAME
-
-          > Brief 2-3 sentence summary of the most important changes in this release.
-
-          ## 💥 Breaking Changes
-          - Description of breaking change (#PR_NUMBER) by @author
-            - **Migration guide:** How to adapt to this change
-
-          ## ✨ New Features
-          - Feature description (#PR_NUMBER) by @author
-
-          ## 🐛 Bug Fixes
-          - Bug fix description (#PR_NUMBER) by @author
-
-          ## ⚡ Performance
-          - Improvement description (#PR_NUMBER) by @author
-
-          ## 🔒 Security
-          - Security fix description (#PR_NUMBER) by @author
-
-          (Include only sections that have entries. Omit empty sections.)
-
-          ## 👥 Contributors
-          Thanks to everyone who contributed to this release:
-          @contributor1, @contributor2, @contributor3
-
-          **Full Changelog:** https://github.com/OWNER/REPO/compare/PREVIOUS_TAG...$TAG_NAME
-
-          ---
-
-          FORMATTING RULES:
-          - Each entry should be a single clear sentence
-          - Always link to the PR number with #NUMBER
-          - Credit the author with @username
-          - Put the most impactful changes first within each section
-          - For breaking changes, ALWAYS include a migration guide
-          - Keep the summary concise but informative
+          Generate notes with: summary, categorized sections (omit empty ones),
+          contributors list, and full changelog link.
+          For breaking changes, ALWAYS include a migration guide.
+          Credit authors with @username and link PRs with #NUMBER.
 
           ──────────────────────────────────────────────
           STEP 5 — UPDATE THE RELEASE
           ──────────────────────────────────────────────
-          - Use the GitHub MCP Server to update the release for tag '$TAG_NAME'
-            with the generated release notes as the body.
-          - If no release exists for this tag (manual workflow_dispatch), create one.
-          - Preserve any existing release assets or settings.
+          Update the release with the generated notes. If no release exists, create one.
 
           IMPORTANT GUIDELINES:
-          - Be accurate — only include changes that actually happened in this range
-          - Don't invent or hallucinate changes
-          - If a commit is trivial (merge commits, version bumps), exclude it
-          - Group related changes from the same PR together
-          - If the release has very few changes, keep the notes brief
-          - Write in English regardless of the commit message language
-          " --allow-all-tools --model claude-opus-4.6
+          - Be accurate — only include changes that actually happened
+          - Exclude trivial commits (merge commits, version bumps)
+          - Write in English regardless of commit message language
+          PROMPT_EOF
+          )
+
+          copilot -p "Repository: ${REPO_NAME}. Tag: ${TAG_NAME}. Previous tag: ${PREVIOUS_TAG:-auto-detect}. ${PROMPT}" \
+            --allow-all-tools --model "$MODEL"
           exit_code=$?
 
           if [ $exit_code -ne 0 ]; then

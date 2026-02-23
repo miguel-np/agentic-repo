@@ -1,0 +1,62 @@
+name: Check Author Permissions
+description: Verifies whether the issue/PR author is allowed to trigger the workflow
+
+inputs:
+  author:
+    description: Login of the issue/PR author
+    required: true
+  author_filter:
+    description: 'Who can trigger: owner_only, collaborators, or all'
+    required: false
+    default: owner_only
+  repo_owner:
+    description: Repository owner login
+    required: true
+  repo_full:
+    description: Full repository name (owner/repo)
+    required: true
+  token:
+    description: GitHub token for API calls
+    required: true
+
+outputs:
+  allowed:
+    description: '"true" if the author passes the filter, "false" otherwise'
+    value: ${{ steps.check.outputs.allowed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Verify author is allowed
+      id: check
+      shell: bash
+      env:
+        AUTHOR: ${{ inputs.author }}
+        AUTHOR_FILTER: ${{ inputs.author_filter }}
+        REPO_OWNER: ${{ inputs.repo_owner }}
+        REPO_FULL: ${{ inputs.repo_full }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        allowed="false"
+        case "$AUTHOR_FILTER" in
+          all)
+            allowed="true"
+            ;;
+          collaborators)
+            perm=$(gh api "repos/${REPO_FULL}/collaborators/${AUTHOR}/permission" \
+              --jq '.permission' 2>/dev/null || echo "none")
+            if [ "$perm" = "admin" ] || [ "$perm" = "write" ] || [ "$perm" = "maintain" ]; then
+              allowed="true"
+            fi
+            ;;
+          owner_only|*)
+            if [ "$AUTHOR" = "$REPO_OWNER" ]; then
+              allowed="true"
+            fi
+            ;;
+        esac
+
+        echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
+        if [ "$allowed" != "true" ]; then
+          echo "::notice::Skipping: author '$AUTHOR' not allowed under filter '$AUTHOR_FILTER'."
+        fi

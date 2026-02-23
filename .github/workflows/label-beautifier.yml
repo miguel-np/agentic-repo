@@ -1,4 +1,4 @@
-name: 🏷️✨ Label Beautifier
+name: "\uD83C\uDFF7\uFE0F\u2728 Label Beautifier"
 
 on:
   workflow_dispatch:
@@ -6,18 +6,23 @@ on:
       dry_run:
         description: 'Dry run mode (only show changes, do not apply them)'
         required: true
-        default: 'false'
+        default: 'true'
         type: choice
         options:
-          - 'false'
           - 'true'
+          - 'false'
   workflow_call:
     inputs:
       dry_run:
         description: 'Dry run mode (only show changes, do not apply them)'
         required: false
         type: string
-        default: 'false'
+        default: 'true'
+      model:
+        description: 'Copilot model to use'
+        required: false
+        type: string
+        default: 'claude-sonnet-4'
     secrets:
       COPILOT_PAT:
         required: true
@@ -28,35 +33,33 @@ permissions:
 
 jobs:
   beautify-labels:
-    name: 🏷️✨ Beautify Repository Labels
+    name: "\uD83C\uDFF7\uFE0F\u2728 Beautify Repository Labels"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: 📥 Checkout repository
+      - name: "\uD83D\uDCE5 Checkout repository"
         uses: actions/checkout@v4
 
-      - name: 📦 Install GitHub Copilot CLI
-        run: |
-          curl -fsSL https://gh.io/copilot-install | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          echo "--- Copilot CLI version ---"
-          $HOME/.local/bin/copilot --version 2>/dev/null || echo "(version flag not supported)"
+      - name: "\uD83D\uDCE6 Install GitHub Copilot CLI"
+        uses: ./.github/actions/install-copilot
 
-      - name: 🏷️✨ Analyze and beautify labels
+      - name: "\uD83C\uDFF7\uFE0F\u2728 Analyze and beautify labels"
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          DRY_RUN: ${{ inputs.dry_run || 'true' }}
+          REPO_NAME: ${{ github.repository }}
+          MODEL: ${{ inputs.model || 'claude-sonnet-4' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
 
-          copilot -p "
-          You are a Label Beautifier for the repository '${{ github.repository }}'.
+          PROMPT=$(cat <<'PROMPT_EOF'
+          You are a Label Beautifier for the repository.
           Your mission is to modernize and improve ALL labels in this repository so they look professional,
           consistent, and include relevant emojis. All label names and descriptions MUST be in English.
 
-          DRY RUN MODE: $DRY_RUN
-          - If 'true': ONLY analyze and report what changes you WOULD make. DO NOT modify any labels.
-          - If 'false': Apply all changes.
+          Use the GitHub MCP Server to determine dry-run mode by reading the workflow run inputs,
+          or follow these instructions based on the mode passed to you.
 
           Follow these steps IN ORDER:
 
@@ -128,14 +131,14 @@ jobs:
           - NEW labels to CREATE (technology-specific or missing standard labels)
           - Labels to KEEP AS-IS (already have emoji, description, and good color)
 
-          If DRY RUN MODE is 'true':
+          If DRY RUN MODE is enabled:
           - Print the full change plan in a structured format and STOP HERE.
           - Do NOT modify any labels.
 
           ──────────────────────────────────────────────
           STEP 6 — APPLY CHANGES
           ──────────────────────────────────────────────
-          Only if DRY RUN MODE is 'false':
+          Only if DRY RUN MODE is disabled:
 
           For labels IN USE (have issues/PRs/discussions):
           - Use the GitHub MCP Server to UPDATE the label (rename + update description + update color)
@@ -159,7 +162,7 @@ jobs:
           - New labels created
           - Labels kept as-is
 
-          ⚠️ IMPORTANT GUIDELINES:
+          IMPORTANT GUIDELINES:
           - NEVER delete a label that is in use — always rename/update it instead
           - Every label MUST have an emoji prefix
           - Every label MUST have an English description
@@ -167,7 +170,11 @@ jobs:
           - Do NOT create duplicate or overlapping labels
           - Default GitHub labels without emojis (bug, documentation, enhancement, etc.) should be beautified
           - Preserve any custom labels that are meaningful to the project, just beautify them
-          " --allow-all-tools
+          PROMPT_EOF
+          )
+
+          copilot -p "Repository: ${REPO_NAME}. Dry run: ${DRY_RUN}. ${PROMPT}" \
+            --allow-all-tools --model "$MODEL"
           exit_code=$?
 
           if [ $exit_code -ne 0 ]; then
